@@ -4,7 +4,7 @@ const ApiError = require('../utils/ApiError');
 const { USER_ROLES } = require('../constants/roles.constant');
 const { generateAccessToken, generateRefreshToken } = require('./token.service');
 
-const registerUser = async ({ name, email, password, role }) => {
+const registerUser = async ({ name, email, password, role, socialProfiles }) => {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
         throw ApiError(409, 'An account with this email already exists.');
@@ -13,12 +13,23 @@ const registerUser = async ({ name, email, password, role }) => {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    const newUser = await User.create({
+    const userData = {
         name,
         email,
         password: hashedPassword,
         role
-    });
+    };
+
+    // Buyer ke liye key create nahi hogi, sirf Seller ke liye save hogi
+    if (role === USER_ROLES.SELLER && socialProfiles) {
+        userData.socialProfiles = {
+            linkedin: socialProfiles.linkedin || null,
+            facebook: socialProfiles.facebook || null,
+            instagram: socialProfiles.instagram || null
+        };
+    }
+
+    const newUser = await User.create(userData);
 
     const accessToken = generateAccessToken(newUser);
     const refreshToken = generateRefreshToken(newUser);
@@ -26,14 +37,20 @@ const registerUser = async ({ name, email, password, role }) => {
     newUser.refreshToken = refreshToken;
     await newUser.save({ validateBeforeSave: false });
 
+    const userResponse = {
+        _id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        status: newUser.status
+    };
+
+    if (newUser.role === USER_ROLES.SELLER) {
+        userResponse.socialProfiles = newUser.socialProfiles;
+    }
+
     return {
-        user: {
-            _id: newUser._id,
-            name: newUser.name,
-            email: newUser.email,
-            role: newUser.role,
-            status: newUser.status
-        },
+        user: userResponse,
         accessToken,
         refreshToken
     };
@@ -64,14 +81,20 @@ const loginUser = async (email, password) => {
     user.refreshToken = refreshToken;
     await user.save({ validateBeforeSave: false });
 
+    const userResponse = {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status
+    };
+
+    if (user.role === USER_ROLES.SELLER && user.socialProfiles) {
+        userResponse.socialProfiles = user.socialProfiles;
+    }
+
     return {
-        user: {
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            status: user.status
-        },
+        user: userResponse,
         accessToken,
         refreshToken
     };

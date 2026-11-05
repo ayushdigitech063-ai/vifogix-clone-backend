@@ -5,6 +5,7 @@ const adminRoutes = require('./admin.routes');
 const authRoutes = require('./auth.routes');
 const contactRoutes = require('./contact.routes');
 const portfolioRoutes = require('./portfolio.routes');
+const sellerRoutes = require('./seller.routes');
 router.get('/health', (req, res) => {
     res.status(200).json({
         success: true,
@@ -16,5 +17,6 @@ router.use('/admin', adminRoutes);
 router.use('/auth', authRoutes);
 router.use('/contact', contactRoutes);
 router.use('/portfolio', portfolioRoutes);
+router.use('/seller', sellerRoutes);
 
 module.exports = router;

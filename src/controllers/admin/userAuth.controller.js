@@ -4,13 +4,15 @@ const { logoutAdmin } = require('../../services/auth.service');
 const { cookieOptions } = require('../../config/cookie.config');
 
 const register = asyncHandler(async (req, res) => {
-    const { name, email, password, role } = req.body;
+    // socialProfiles add kar diya
+    const { name, email, password, role, socialProfiles } = req.body;
 
     const { user, accessToken, refreshToken } = await registerUser({
         name,
         email,
         password,
-        role
+        role,
+        socialProfiles
     });
 
     res.cookie('refreshToken', refreshToken, cookieOptions);
