@@ -36,7 +36,7 @@ const updateProjectById = async (projectId, updateData) => {
 const deleteProjectById = async (projectId) => {
     const project = await Portfolio.findByIdAndDelete(projectId);
     if (!project) {
-        throw ApiError(404, 'Portfolio project not found');
+        throw ApiError(404, 'Portfolio project not found');     //hdfdddbddbnnd
     }
     return project;
 };
