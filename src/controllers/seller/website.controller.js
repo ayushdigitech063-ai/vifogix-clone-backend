@@ -7,14 +7,9 @@ const {
     getSellerWebsitesList
 } = require('../../services/website.service');
 
-// 1. Live Check Domain Info (Sidebar / Form input check)
+// 1. Live Check Domain Info (Validated by checkDomainQuerySchema)
 const checkDomainStats = asyncHandler(async (req, res) => {
-    const { domain } = req.query;
-    if (!domain) {
-        throw ApiError(400, 'Domain query parameter is required');
-    }
-
-    const stats = await getDomainRegistrationHistory(domain);
+    const stats = await getDomainRegistrationHistory(req.query.domain);
 
     return res.status(200).json({
         success: true,
@@ -24,16 +19,9 @@ const checkDomainStats = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Single Website Add
+// 2. Single Website Add (Validated by addWebsiteSchema)
 const createSingleListing = asyncHandler(async (req, res) => {
-    const sellerId = req.user._id;
-
-    // Check mandatory country
-    if (!req.body.country || !req.body.country.trim()) {
-        throw ApiError(400, 'Country is required');
-    }
-
-    const { website, domainStats } = await addSingleWebsite(sellerId, req.body);
+    const { website, domainStats } = await addSingleWebsite(req.user._id, req.body);
 
     return res.status(201).json({
         success: true,
@@ -43,16 +31,13 @@ const createSingleListing = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Bulk CSV 1000+ Upload
+// 3. Bulk CSV Upload
 const uploadBulkCsvListings = asyncHandler(async (req, res) => {
-    const sellerId = req.user._id;
-    const csvFilePath = req.file?.path;
-
-    if (!csvFilePath) {
+    if (!req.file?.path) {
         throw ApiError(400, 'Please upload a valid .csv file');
     }
 
-    const result = await processBulkCsvUpload(sellerId, csvFilePath);
+    const result = await processBulkCsvUpload(req.user._id, req.file.path);
 
     return res.status(200).json({
         success: true,
@@ -62,19 +47,9 @@ const uploadBulkCsvListings = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. View Seller Websites (With Pagination, Search & Country filter)
+// 4. View Seller Websites (Validated by listWebsitesQuerySchema)
 const getMyListings = asyncHandler(async (req, res) => {
-    const sellerId = req.user._id;
-    const { page, limit, status, category, country, search } = req.query;
-
-    const data = await getSellerWebsitesList(sellerId, {
-        page,
-        limit,
-        status,
-        category,
-        country,
-        search
-    });
+    const data = await getSellerWebsitesList(req.user._id, req.query);
 
     return res.status(200).json({
         success: true,

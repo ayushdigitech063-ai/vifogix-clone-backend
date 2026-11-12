@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
 const ApiError = require('../utils/ApiError');
 const { USER_ROLES } = require('../constants/roles.constant');
@@ -20,7 +21,6 @@ const registerUser = async ({ name, email, password, role, socialProfiles }) => 
         role
     };
 
-    // Buyer ke liye key create nahi hogi, sirf Seller ke liye save hogi
     if (role === USER_ROLES.SELLER && socialProfiles) {
         userData.socialProfiles = {
             linkedin: socialProfiles.linkedin || null,
@@ -100,7 +100,64 @@ const loginUser = async (email, password) => {
     };
 };
 
+const refreshUserToken = async (incomingRefreshToken, expectedRole) => {
+    if (!incomingRefreshToken) {
+        throw ApiError(401, 'Unauthorized request. Refresh token missing.');
+    }
+
+    let decoded;
+    try {
+        decoded = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
+    } catch (err) {
+        throw ApiError(401, 'Refresh token expired or invalid');
+    }
+
+    const user = await User.findById(decoded._id);
+    if (!user) {
+        throw ApiError(401, 'User does not exist');
+    }
+
+    if (user.role === USER_ROLES.ADMIN) {
+        throw ApiError(403, 'Admins cannot refresh via user portal.');
+    }
+
+    if (expectedRole && user.role !== expectedRole) {
+        throw ApiError(403, `Access denied. Expected ${expectedRole} session.`);
+    }
+
+    if (user.status === 'SUSPENDED') {
+        throw ApiError(403, 'Your account has been suspended.');
+    }
+
+    if (user.refreshToken !== incomingRefreshToken) {
+        throw ApiError(401, 'Refresh token is expired or already used');
+    }
+
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = generateRefreshToken(user);
+
+    user.refreshToken = newRefreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    return {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken
+    };
+};
+
+const logoutUser = async (incomingRefreshToken) => {
+    if (!incomingRefreshToken) return;
+
+    await User.findOneAndUpdate(
+        { refreshToken: incomingRefreshToken },
+        { $set: { refreshToken: null } },
+        { returnDocument: 'after' }
+    );
+};
+
 module.exports = {
     registerUser,
-    loginUser
+    loginUser,
+    refreshUserToken,
+    logoutUser
 };

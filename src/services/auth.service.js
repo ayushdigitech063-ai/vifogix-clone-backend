@@ -55,12 +55,14 @@ const refreshAdminToken = async (incomingRefreshToken) => {
         throw ApiError(401, 'User does not exist');
     }
 
-    // DB me stored refresh token se compare karein
+    if (admin.role !== USER_ROLES.ADMIN) {
+        throw ApiError(403, 'Access denied. Only admins allowed.');
+    }
+
     if (admin.refreshToken !== incomingRefreshToken) {
         throw ApiError(401, 'Refresh token is expired or already used');
     }
 
-    // Token Rotation: Naya Access Token aur naya Refresh Token issue karein
     const newAccessToken = generateAccessToken(admin);
     const newRefreshToken = generateRefreshToken(admin);
 
@@ -73,11 +75,13 @@ const refreshAdminToken = async (incomingRefreshToken) => {
     };
 };
 
-const logoutAdmin = async (userId) => {
-    await User.findByIdAndUpdate(
-        userId,
+const logoutAdmin = async (incomingRefreshToken) => {
+    if (!incomingRefreshToken) return;
+
+    await User.findOneAndUpdate(
+        { refreshToken: incomingRefreshToken },
         { $set: { refreshToken: null } },
-        { new: true }
+        { returnDocument: 'after' }
     );
 };
 
