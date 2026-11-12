@@ -2,13 +2,12 @@ const asyncHandler = require('../../utils/asyncHandler');
 const { loginAdmin, refreshAdminToken, logoutAdmin } = require('../../services/auth.service');
 const { cookieOptions } = require('../../config/cookie.config');
 
-// 1. Login Controller
+// 1. Admin Login
 const login = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
     const { admin, accessToken, refreshToken } = await loginAdmin(email, password);
 
-    // Refresh token safely browser ke httpOnly cookie me
     res.cookie('refreshToken', refreshToken, cookieOptions);
 
     return res.status(200).json({
@@ -22,13 +21,12 @@ const login = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Refresh Token Controller
+// 2. Admin Refresh Token
 const refreshAccessToken = asyncHandler(async (req, res) => {
     const incomingRefreshToken = req.cookies?.refreshToken;
 
     const tokens = await refreshAdminToken(incomingRefreshToken);
 
-    // Naya refresh token cookie me update
     res.cookie('refreshToken', tokens.refreshToken, cookieOptions);
 
     return res.status(200).json({
@@ -41,15 +39,14 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Logout Controller
+// 3. Admin Logout
 const logout = asyncHandler(async (req, res) => {
-    const userId = req.user?._id;
+    const incomingRefreshToken = req.cookies?.refreshToken;
 
-    if (userId) {
-        await logoutAdmin(userId);
+    if (incomingRefreshToken) {
+        await logoutAdmin(incomingRefreshToken);
     }
 
-    // Cookie remove ki
     res.clearCookie('refreshToken', cookieOptions);
 
     return res.status(200).json({

@@ -1,3 +1,4 @@
+const { z } = require('zod');
 const ApiError = require('../utils/ApiError');
 
 const validate = (schema) => (req, res, next) => {
@@ -8,20 +9,41 @@ const validate = (schema) => (req, res, next) => {
             params: req.params
         });
 
-        // Clean sanitized data wapas request me assign karein
-        req.body = parsed.body || req.body;
-        req.query = parsed.query || req.query;
-        req.params = parsed.params || req.params;
+        // Assign sanitized and coerced values back to request safely
+        if (parsed.body) req.body = parsed.body;
+        if (parsed.query) Object.assign(req.query, parsed.query);
+        if (parsed.params) Object.assign(req.params, parsed.params);
 
-        next();
+        return next();
     } catch (err) {
-        // Zod format error messages
-        const formattedErrors = err.errors ? err.errors.map(e => ({
-            field: e.path.slice(1).join('.'),
-            message: e.message
-        })) : [];
+        if (err instanceof z.ZodError || err.name === 'ZodError') {
+            const rawIssues = err.issues || err.errors || [];
+            const seenFields = new Set();
+            const formattedErrors = [];
 
-        next(ApiError(400, 'Validation Failed', formattedErrors));
+            for (const e of rawIssues) {
+                const fieldName = e.path.length > 1
+                    ? e.path.slice(1).join('.')
+                    : e.path.join('.') || 'general';
+
+                // Ek field ka sirf pehla exact error rakho (no duplicate noise)
+                if (!seenFields.has(fieldName)) {
+                    seenFields.add(fieldName);
+                    formattedErrors.push({
+                        field: fieldName,
+                        message: e.message
+                    });
+                }
+            }
+
+            const primaryErrorMessage = formattedErrors.length > 0
+                ? formattedErrors[0].message
+                : 'Invalid request data';
+
+            return next(ApiError(400, primaryErrorMessage, formattedErrors));
+        }
+
+        return next(err);
     }
 };
 

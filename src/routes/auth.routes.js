@@ -4,7 +4,10 @@ const router = express.Router();
 const {
     register,
     login,
-    logout,
+    refreshSellerAccessToken,
+    refreshBuyerAccessToken,
+    logoutSeller,
+    logoutBuyer,
     getProfile
 } = require('../controllers/admin/userAuth.controller');
 
@@ -16,12 +19,17 @@ const {
 const { loginLimiter } = require('../middlewares/rateLimiter.middleware');
 const { verifyJWT } = require('../middlewares/auth.middleware');
 
-// Public endpoints
+// Public & Cookie-based Endpoints
 router.post('/register', validate(registerUserSchema), register);
 router.post('/login', loginLimiter, validate(loginUserSchema), login);
 
-// Protected endpoints
-router.post('/logout', verifyJWT, logout);
+router.post('/seller/refresh-token', refreshSellerAccessToken);
+router.post('/buyer/refresh-token', refreshBuyerAccessToken);
+
+router.post('/seller/logout', logoutSeller);
+router.post('/buyer/logout', logoutBuyer);
+
+// Protected Endpoints
 router.get('/profile', verifyJWT, getProfile);
 
 module.exports = router;

@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 
-
 const {
     login,
     refreshAccessToken,
@@ -37,19 +36,14 @@ const {
     updateInquiryAdminSchema
 } = require('../validations/contact.validation');
 
-
+// Cookie-based & Public Auth Routes (verifyJWT ke upar)
 router.post('/auth/login', loginLimiter, validate(loginSchema), login);
-
-
 router.post('/auth/refresh-token', refreshAccessToken);
-
-
-router.use(verifyJWT, authorizeRoles(USER_ROLES.ADMIN));
-
-
 router.post('/auth/logout', logout);
 
-// 4. Admin Profile View
+// Protected Admin Routes
+router.use(verifyJWT, authorizeRoles(USER_ROLES.ADMIN));
+
 router.get('/profile', (req, res) => {
     return res.status(200).json({
         success: true,
@@ -61,13 +55,11 @@ router.get('/profile', (req, res) => {
     });
 });
 
-// contact section 
+// Contact section
 router.get('/contacts', validate(adminListInquiriesSchema), listInquiries);
 router.get('/contacts/:contactId', validate(contactIdParamSchema), getInquiryDetails);
 router.patch('/contacts/:contactId', validate(updateInquiryAdminSchema), updateInquiry);
 router.delete('/contacts/:contactId', validate(contactIdParamSchema), removeInquiry);
-
-
 
 // Portfolio Management
 router.post('/portfolio', upload.single('thumbnail'), createPortfolio);

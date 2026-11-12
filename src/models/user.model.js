@@ -25,6 +25,15 @@ const userSchema = new mongoose.Schema(
             enum: Object.values(USER_ROLES),
             default: USER_ROLES.BUYER
         },
+        // 👇 YEH FIELD ADD HOGI (Only for Seller Identity Verification)
+       socialProfiles: {
+            type: {
+                linkedin: { type: String, trim: true, default: null },
+                facebook: { type: String, trim: true, default: null },
+                instagram: { type: String, trim: true, default: null }
+            },
+            required: false
+        },
         status: {
             type: String,
             enum: ['ACTIVE', 'SUSPENDED'],
