@@ -5,7 +5,8 @@ const {
     checkDomainStats,
     createSingleListing,
     uploadBulkCsvListings,
-    getMyListings
+    getMyListings,
+    getMarketplaceListings
 } = require('../controllers/seller/website.controller');
 
 const { verifyJWT } = require('../middlewares/auth.middleware');
@@ -19,6 +20,8 @@ const {
     checkDomainQuerySchema,
     listWebsitesQuerySchema
 } = require('../validations/website.validation');
+
+router.get('/marketplace', validate(listWebsitesQuerySchema), getMarketplaceListings);
 
 router.use(verifyJWT, authorizeRoles(USER_ROLES.SELLER));
 

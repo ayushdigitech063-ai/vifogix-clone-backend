@@ -19,6 +19,18 @@ const {
     removePortfolio
 } = require('../controllers/portfolio.controller');
 
+const {
+    getAllWebsitesForAdmin,
+    getWebsiteDetailsForAdmin,
+    updateWebsiteVerificationStatus
+} = require('../controllers/seller/website.controller');
+
+const {
+    adminListWebsitesQuerySchema,
+    websiteIdParamSchema,
+    adminReviewWebsiteSchema
+} = require('../validations/website.validation');
+
 // Middlewares
 const validate = require('../middlewares/validate.middleware');
 const { loginLimiter } = require('../middlewares/rateLimiter.middleware');
@@ -65,5 +77,10 @@ router.delete('/contacts/:contactId', validate(contactIdParamSchema), removeInqu
 router.post('/portfolio', upload.single('thumbnail'), createPortfolio);
 router.patch('/portfolio/:projectId', upload.single('thumbnail'), validate(portfolioIdParamSchema), modifyPortfolio);
 router.delete('/portfolio/:projectId', validate(portfolioIdParamSchema), removePortfolio);
+
+// Admin Website Listing & Verification Section
+router.get('/websites', validate(adminListWebsitesQuerySchema), getAllWebsitesForAdmin);
+router.get('/websites/:websiteId', validate(websiteIdParamSchema), getWebsiteDetailsForAdmin);
+router.patch('/websites/:websiteId/review', validate(adminReviewWebsiteSchema), updateWebsiteVerificationStatus);
 
 module.exports = router;
