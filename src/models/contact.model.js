@@ -4,7 +4,7 @@ const contactSchema = new mongoose.Schema(
     {
         inquiryType: {
             type: String,
-            enum: ['BUYER', 'PUBLISHER'],
+            enum: ['BUYER', 'SELLER'],
             required: true,
             index: true
         },

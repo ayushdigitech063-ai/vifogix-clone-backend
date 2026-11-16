@@ -43,9 +43,6 @@ const { upload } = require('../middlewares/multer.middleware');
 const { loginSchema } = require('../validations/auth.validation');
 const { portfolioIdParamSchema } = require('../validations/portfolio.validation');
 const {
-    contactIdParamSchema,
-    adminListInquiriesSchema,
-    updateInquiryAdminSchema
 } = require('../validations/contact.validation');
 
 // Cookie-based & Public Auth Routes (verifyJWT ke upar)
@@ -68,10 +65,10 @@ router.get('/profile', (req, res) => {
 });
 
 // Contact section
-router.get('/contacts', validate(adminListInquiriesSchema), listInquiries);
-router.get('/contacts/:contactId', validate(contactIdParamSchema), getInquiryDetails);
-router.patch('/contacts/:contactId', validate(updateInquiryAdminSchema), updateInquiry);
-router.delete('/contacts/:contactId', validate(contactIdParamSchema), removeInquiry);
+router.get('/contacts', listInquiries);
+router.get('/contacts/:contactId', getInquiryDetails);
+router.patch('/contacts/:contactId', updateInquiry);
+router.delete('/contacts/:contactId', removeInquiry);
 
 // Portfolio Management
 router.post('/portfolio', upload.single('thumbnail'), createPortfolio);
