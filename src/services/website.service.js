@@ -1,6 +1,7 @@
 const fs = require('fs');
 const csv = require('csv-parser');
 const Website = require('../models/website.model');
+const User = require('../models/user.model');
 const ApiError = require('../utils/ApiError');
 const { csvWebsiteRowSchema } = require('../validations/website.validation');
 
@@ -60,6 +61,7 @@ const addSingleWebsite = async (sellerId, validatedData) => {
         country: validatedData.country,
         otherCountriesCount: validatedData.otherCountriesCount ?? 0,
         category: validatedData.category,
+        subCategories: validatedData.subCategories,
         language: validatedData.language,
 
         // Commercial Details
@@ -123,6 +125,7 @@ const processBulkCsvUpload = async (sellerId, filePath) => {
                     country: rawRow.country ?? rawRow.Country,
                     otherCountriesCount: rawRow.otherCountriesCount ?? rawRow.OtherCountriesCount,
                     category: rawRow.category ?? rawRow.Category,
+                    subCategories: rawRow.subCategories ?? rawRow.SubCategories,
                     price: rawRow.price ?? rawRow.Price,
                     contentWritingPrice: rawRow.contentWritingPrice ?? rawRow.ContentWritingPrice,
                     turnaroundDays: rawRow.turnaroundDays ?? rawRow.TurnaroundDays,
@@ -267,11 +270,12 @@ const processBulkCsvUpload = async (sellerId, filePath) => {
 };
 
 // 4. Seller Listings with Filters & Pagination
-const getSellerWebsitesList = async (sellerId, { page = 1, limit = 10, status, category, country, search }) => {
+const getSellerWebsitesList = async (sellerId, { page = 1, limit = 10, status, category, subCategory, country, search }) => {
     const filter = { sellerId };
 
     if (status) filter.status = status;
     if (category && category !== 'All') filter.category = category;
+    if (subCategory && subCategory !== 'All') filter.subCategories = subCategory;
     if (country) filter.country = country;
     if (search) {
         filter.domain = { $regex: escapeRegex(search), $options: 'i' };
@@ -296,10 +300,21 @@ const getSellerWebsitesList = async (sellerId, { page = 1, limit = 10, status, c
 };
 
 // 5. Public / Buyer Marketplace Listings ("Boost Your SEO with Trusted Guest Posts")
-const getPublicMarketplaceList = async ({ page = 1, limit = 10, category, country, search }) => {
-    const filter = { status: 'ACTIVE', isVerified: true };
+const getPublicMarketplaceList = async ({ page = 1, limit = 10, category, subCategory, country, search }) => {
+    const activeSellerIds = await User.find({
+        role: 'SELLER',
+        status: 'ACTIVE',
+        isDeleted: { $ne: true }
+    }).distinct('_id');
+
+    const filter = {
+        sellerId: { $in: activeSellerIds },
+        status: 'ACTIVE',
+        isVerified: true
+    };
 
     if (category && category !== 'All') filter.category = category;
+    if (subCategory && subCategory !== 'All') filter.subCategories = subCategory;
     if (country) filter.country = country;
     if (search) {
         filter.domain = { $regex: escapeRegex(search), $options: 'i' };
@@ -328,17 +343,14 @@ const getPublicMarketplaceList = async ({ page = 1, limit = 10, category, countr
     };
 };
 
-// ============================================================================
-// NEW: ADMIN WEBSITE MANAGEMENT FUNCTIONS (Added Here)
-// ============================================================================
-
 // 6. Admin: Get All Websites with Seller Info + Status Summary Counts
-const getAdminWebsitesList = async ({ page = 1, limit = 10, status, sellerId, category, country, search }) => {
+const getAdminWebsitesList = async ({ page = 1, limit = 10, status, sellerId, category, subCategory, country, search }) => {
     const filter = {};
 
     if (status) filter.status = status;
     if (sellerId) filter.sellerId = sellerId;
     if (category && category !== 'All') filter.category = category;
+    if (subCategory && subCategory !== 'All') filter.subCategories = subCategory;
     if (country) filter.country = country;
     if (search) {
         filter.domain = { $regex: escapeRegex(search), $options: 'i' };
@@ -348,7 +360,7 @@ const getAdminWebsitesList = async ({ page = 1, limit = 10, status, sellerId, ca
 
     const [websites, total, statusBreakdown] = await Promise.all([
         Website.find(filter)
-            .populate('sellerId', 'name email role socialProfiles')
+            .populate('sellerId', 'name email role socialProfiles status isDeleted')
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
@@ -387,7 +399,7 @@ const getAdminWebsitesList = async ({ page = 1, limit = 10, status, sellerId, ca
 // 7. Admin: Get Single Website Details by ID
 const getAdminWebsiteById = async (websiteId) => {
     const website = await Website.findById(websiteId)
-        .populate('sellerId', 'name email role socialProfiles createdAt')
+        .populate('sellerId', 'name email role socialProfiles status isDeleted createdAt')
         .lean();
 
     if (!website) {
@@ -418,7 +430,7 @@ const reviewAndVerifyWebsite = async (websiteId, reviewData) => {
         website.isVerified = false;
     }
 
-    // Update any SEO metrics provided by Admin during review
+    // Update any SEO metrics or category/subCategories provided by Admin during review
     Object.keys(seoMetrics).forEach((key) => {
         if (seoMetrics[key] !== undefined) {
             website[key] = seoMetrics[key];

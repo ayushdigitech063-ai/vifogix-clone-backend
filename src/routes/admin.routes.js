@@ -4,7 +4,11 @@ const router = express.Router();
 const {
     login,
     refreshAccessToken,
-    logout
+    logout,
+    listAllUsers,
+    getUserDetails,
+    updateUserStatus,
+    removeUser
 } = require('../controllers/admin/auth.controller');
 
 const {
@@ -20,6 +24,10 @@ const {
 } = require('../controllers/portfolio.controller');
 
 const {
+    modifyFooter
+} = require('../controllers/admin/footer.controller');
+
+const {
     getAllWebsitesForAdmin,
     getWebsiteDetailsForAdmin,
     updateWebsiteVerificationStatus
@@ -31,6 +39,12 @@ const {
     adminReviewWebsiteSchema
 } = require('../validations/website.validation');
 
+const {
+    updateFooterSchema
+} = require('../validations/footer.validation');
+
+
+
 // Middlewares
 const validate = require('../middlewares/validate.middleware');
 const { loginLimiter } = require('../middlewares/rateLimiter.middleware');
@@ -40,7 +54,12 @@ const { USER_ROLES } = require('../constants/roles.constant');
 const { upload } = require('../middlewares/multer.middleware');
 
 // Validations
-const { loginSchema } = require('../validations/auth.validation');
+const {
+    loginSchema,
+    listUsersQuerySchema,
+    userIdParamSchema,
+    updateUserStatusSchema
+} = require('../validations/auth.validation');
 const { portfolioIdParamSchema } = require('../validations/portfolio.validation');
 const {
 } = require('../validations/contact.validation');
@@ -49,6 +68,8 @@ const {
 router.post('/auth/login', loginLimiter, validate(loginSchema), login);
 router.post('/auth/refresh-token', refreshAccessToken);
 router.post('/auth/logout', logout);
+
+// router.get('/footer', fetchFooter);
 
 // Protected Admin Routes
 router.use(verifyJWT, authorizeRoles(USER_ROLES.ADMIN));
@@ -63,6 +84,12 @@ router.get('/profile', (req, res) => {
         }
     });
 });
+//platform user and seller management 
+
+router.get('/users', validate(listUsersQuerySchema), listAllUsers);
+router.get('/users/:userId', validate(userIdParamSchema), getUserDetails);
+router.patch('/users/:userId/status', validate(updateUserStatusSchema), updateUserStatus);
+router.delete('/users/:userId', validate(userIdParamSchema), removeUser);
 
 // Contact section
 router.get('/contacts', listInquiries);
@@ -79,5 +106,8 @@ router.delete('/portfolio/:projectId', validate(portfolioIdParamSchema), removeP
 router.get('/websites', validate(adminListWebsitesQuerySchema), getAllWebsitesForAdmin);
 router.get('/websites/:websiteId', validate(websiteIdParamSchema), getWebsiteDetailsForAdmin);
 router.patch('/websites/:websiteId/review', validate(adminReviewWebsiteSchema), updateWebsiteVerificationStatus);
+
+// Footer Management Section (Admin Only Update)
+router.patch('/footer', validate(updateFooterSchema), modifyFooter);
 
 module.exports = router;

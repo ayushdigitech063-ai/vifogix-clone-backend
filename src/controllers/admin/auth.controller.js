@@ -1,8 +1,16 @@
 const asyncHandler = require('../../utils/asyncHandler');
-const { loginAdmin, refreshAdminToken, logoutAdmin } = require('../../services/auth.service');
+const {
+    loginAdmin,
+    refreshAdminToken,
+    logoutAdmin,
+    getAllPlatformUsers,
+    getSingleUserDetails,
+    changeUserAccountStatus,
+    deletePlatformUser
+} = require('../../services/auth.service');
 const { cookieOptions } = require('../../config/cookie.config');
 
-// 1. Admin Login
+
 const login = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
@@ -21,7 +29,7 @@ const login = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Admin Refresh Token
+
 const refreshAccessToken = asyncHandler(async (req, res) => {
     const incomingRefreshToken = req.cookies?.refreshToken;
 
@@ -39,7 +47,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Admin Logout
+
 const logout = asyncHandler(async (req, res) => {
     const incomingRefreshToken = req.cookies?.refreshToken;
 
@@ -57,8 +65,60 @@ const logout = asyncHandler(async (req, res) => {
     });
 });
 
+
+const listAllUsers = asyncHandler(async (req, res) => {
+    const data = await getAllPlatformUsers(req.query);
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Platform users fetched successfully',
+        data
+    });
+});
+
+
+const getUserDetails = asyncHandler(async (req, res) => {
+    const data = await getSingleUserDetails(req.params.userId);
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'User details fetched successfully',
+        data
+    });
+});
+
+
+const updateUserStatus = asyncHandler(async (req, res) => {
+    const user = await changeUserAccountStatus(req.params.userId, req.body.status);
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: `User status updated to ${req.body.status} successfully`,
+        data: { user }
+    });
+});
+
+
+const removeUser = asyncHandler(async (req, res) => {
+    const result = await deletePlatformUser(req.params.userId);
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'User deleted successfully',
+        data: result
+    });
+});
+
 module.exports = {
     login,
     refreshAccessToken,
-    logout
+    logout,
+    listAllUsers,
+    getUserDetails,
+    updateUserStatus,
+    removeUser
 };

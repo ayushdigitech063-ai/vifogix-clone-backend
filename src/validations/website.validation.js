@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { WEBSITE_CATEGORIES, VALID_CATEGORY_NAMES } = require('../constants/category.constant');
 
 // Helper: Domain Sanitizer & Validator (XSS, IP, Port, Protocol & www removal)
 const sanitizeAndValidateDomain = (rawDomain) => {
@@ -33,6 +34,39 @@ const sanitizeAndValidateDomain = (rawDomain) => {
     return cleanDomain;
 };
 
+// Helper: Validate that selected subCategories strictly belong to the selected main category
+const validateCategoryAndSubCategories = (data, ctx) => {
+    if (!data.category) return;
+
+    const allowedSubs = WEBSITE_CATEGORIES[data.category];
+    if (!allowedSubs) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['category'],
+            message: `Invalid category. Allowed categories: ${VALID_CATEGORY_NAMES.join(', ')}`
+        });
+        return;
+    }
+
+    if (!data.subCategories || data.subCategories.length === 0) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['subCategories'],
+            message: 'Please select at least 1 subcategory'
+        });
+        return;
+    }
+
+    const invalidSubs = data.subCategories.filter((sub) => !allowedSubs.includes(sub));
+    if (invalidSubs.length > 0) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['subCategories'],
+            message: `Invalid subcategories for '${data.category}': ${invalidSubs.join(', ')}`
+        });
+    }
+};
+
 // Reusable Helper: Empty string "" ko automatically null me convert karne ke liye
 const optionalNullableString = z
     .string()
@@ -65,114 +99,122 @@ const domainFieldSchema = z
 
 // 1. Add Single Website Schema
 const addWebsiteSchema = z.object({
-    body: z.object({
-        domain: domainFieldSchema,
-        category: z
-            .string()
-            .trim()
-            .optional()
-            .transform((val) => (val && val.length > 0 ? val : 'All')),
-        country: z
-            .string({ error: 'Country is required', required_error: 'Country is required' })
-            .trim()
-            .min(2, 'Country name must be at least 2 characters long'),
-        // NEW: UI "+4 Others" country count
-        otherCountriesCount: z.coerce
-            .number({ error: 'Other countries count must be a number' })
-            .int()
-            .min(0, 'Other countries count cannot be negative')
-            .optional()
-            .default(0),
-        language: z
-            .string()
-            .trim()
-            .optional()
-            .transform((val) => (val && val.length > 0 ? val : 'English')),
+    body: z
+        .object({
+            domain: domainFieldSchema,
+            category: z.enum(VALID_CATEGORY_NAMES, {
+                error: 'Please select a valid category',
+                required_error: 'Category is required'
+            }),
+            subCategories: z
+                .array(z.string().trim().min(1), {
+                    error: 'Subcategories must be a list of strings',
+                    required_error: 'At least 1 subcategory is required'
+                })
+                .min(1, 'Please select at least 1 subcategory')
+                .transform((arr) => [...new Set(arr)]),
+            country: z
+                .string({ error: 'Country is required', required_error: 'Country is required' })
+                .trim()
+                .min(2, 'Country name must be at least 2 characters long'),
+            // NEW: UI "+4 Others" country count
+            otherCountriesCount: z.coerce
+                .number({ error: 'Other countries count must be a number' })
+                .int()
+                .min(0, 'Other countries count cannot be negative')
+                .optional()
+                .default(0),
+            language: z
+                .string()
+                .trim()
+                .optional()
+                .transform((val) => (val && val.length > 0 ? val : 'English')),
 
-        // Commercial Details
-        price: z.coerce
-            .number({
-                error: 'Price must be a valid number',
-                required_error: 'Price is required',
-                invalid_type_error: 'Price must be a valid number'
-            })
-            .min(5, 'Price must be at least $5')
-            .max(20000, 'Price cannot exceed $20,000'),
-        contentWritingPrice: z.coerce
-            .number({ error: 'Content writing price must be a number', invalid_type_error: 'Content writing price must be a number' })
-            .nonnegative('Content writing price cannot be negative')
-            .optional()
-            .default(0),
-        turnaroundDays: z.coerce
-            .number({ error: 'Turnaround days must be a number', invalid_type_error: 'Turnaround days must be a number' })
-            .int('Turnaround days must be a whole number')
-            .min(1, 'Turnaround days must be at least 1 day')
-            .max(30, 'Turnaround days cannot exceed 30 days')
-            .optional()
-            .default(3),
-        maxLinksAllowed: z.coerce
-            .number()
-            .int()
-            .min(1, 'Minimum 1 link must be allowed')
-            .max(5, 'Maximum 5 links are allowed')
-            .optional()
-            .default(2),
-        linkType: z
-            .enum(['DoFollow', 'NoFollow'], {
-                error: 'Link type must be either DoFollow or NoFollow',
-                errorMap: () => ({ message: 'Link type must be either DoFollow or NoFollow' })
-            })
-            .optional()
-            .default('DoFollow'),
-        samplePostUrl: z
-            .string()
-            .trim()
-            .url('Sample post URL must be a valid URL')
-            .optional()
-            .nullable()
-            .or(z.literal(''))
-            .transform((val) => (val === '' ? null : val ?? null)),
+            // Commercial Details
+            price: z.coerce
+                .number({
+                    error: 'Price must be a valid number',
+                    required_error: 'Price is required',
+                    invalid_type_error: 'Price must be a valid number'
+                })
+                .min(5, 'Price must be at least $5')
+                .max(20000, 'Price cannot exceed $20,000'),
+            contentWritingPrice: z.coerce
+                .number({ error: 'Content writing price must be a number', invalid_type_error: 'Content writing price must be a number' })
+                .nonnegative('Content writing price cannot be negative')
+                .optional()
+                .default(0),
+            turnaroundDays: z.coerce
+                .number({ error: 'Turnaround days must be a number', invalid_type_error: 'Turnaround days must be a number' })
+                .int('Turnaround days must be a whole number')
+                .min(1, 'Turnaround days must be at least 1 day')
+                .max(30, 'Turnaround days cannot exceed 30 days')
+                .optional()
+                .default(3),
+            maxLinksAllowed: z.coerce
+                .number()
+                .int()
+                .min(1, 'Minimum 1 link must be allowed')
+                .max(5, 'Maximum 5 links are allowed')
+                .optional()
+                .default(2),
+            linkType: z
+                .enum(['DoFollow', 'NoFollow'], {
+                    error: 'Link type must be either DoFollow or NoFollow',
+                    errorMap: () => ({ message: 'Link type must be either DoFollow or NoFollow' })
+                })
+                .optional()
+                .default('DoFollow'),
+            samplePostUrl: z
+                .string()
+                .trim()
+                .url('Sample post URL must be a valid URL')
+                .optional()
+                .nullable()
+                .or(z.literal(''))
+                .transform((val) => (val === '' ? null : val ?? null)),
 
-        // SEO Authority Scores (DR | DA | AS)
-        mozDA: z
-            .number({ error: 'Moz DA must be a number' })
-            .int('Moz DA must be an integer')
-            .min(0, 'Moz DA cannot be less than 0')
-            .max(100, 'Moz DA cannot exceed 100')
-            .optional()
-            .nullable()
-            .default(null),
-        ahrefsDR: z
-            .number({ error: 'Ahrefs DR must be a number' })
-            .int('Ahrefs DR must be an integer')
-            .min(0, 'Ahrefs DR cannot be less than 0')
-            .max(100, 'Ahrefs DR cannot exceed 100')
-            .optional()
-            .nullable()
-            .default(null),
-        semrushAS: z
-            .number({ error: 'Semrush AS must be a number' })
-            .int('Semrush AS must be an integer')
-            .min(0, 'Semrush AS cannot be less than 0')
-            .max(100, 'Semrush AS cannot exceed 100')
-            .optional()
-            .nullable()
-            .default(null),
+            // SEO Authority Scores (DR | DA | AS)
+            mozDA: z
+                .number({ error: 'Moz DA must be a number' })
+                .int('Moz DA must be an integer')
+                .min(0, 'Moz DA cannot be less than 0')
+                .max(100, 'Moz DA cannot exceed 100')
+                .optional()
+                .nullable()
+                .default(null),
+            ahrefsDR: z
+                .number({ error: 'Ahrefs DR must be a number' })
+                .int('Ahrefs DR must be an integer')
+                .min(0, 'Ahrefs DR cannot be less than 0')
+                .max(100, 'Ahrefs DR cannot exceed 100')
+                .optional()
+                .nullable()
+                .default(null),
+            semrushAS: z
+                .number({ error: 'Semrush AS must be a number' })
+                .int('Semrush AS must be an integer')
+                .min(0, 'Semrush AS cannot be less than 0')
+                .max(100, 'Semrush AS cannot exceed 100')
+                .optional()
+                .nullable()
+                .default(null),
 
-        // Traffic, Backlinks, Domain Age & Deals (Marketplace Table UI Fields)
-        monthlyTraffic: optionalNullableString.default(null),
-        semrushTraffic: optionalNullableString.default(null),      // NEW: "120.8M"
-        ahrefsTraffic: optionalNullableString.default(null),       // NEW: "75.9M"
-        followedBacklinks: optionalNullableString.default(null),   // NEW: "266.8M"
-        noFollowedBacklinks: optionalNullableString.default(null), // NEW: "55.9M"
-        domainAge: optionalNullableString.default(null),           // "32Y 2M"
-        totalDeals: z.coerce
-            .number()
-            .int()
-            .min(0, 'Total deals cannot be negative')
-            .optional()
-            .default(0) // NEW: "250+"
-    })
+            // Traffic, Backlinks, Domain Age & Deals (Marketplace Table UI Fields)
+            monthlyTraffic: optionalNullableString.default(null),
+            semrushTraffic: optionalNullableString.default(null),
+            ahrefsTraffic: optionalNullableString.default(null),
+            followedBacklinks: optionalNullableString.default(null),
+            noFollowedBacklinks: optionalNullableString.default(null),
+            domainAge: optionalNullableString.default(null),
+            totalDeals: z.coerce
+                .number()
+                .int()
+                .min(0, 'Total deals cannot be negative')
+                .optional()
+                .default(0)
+        })
+        .superRefine(validateCategoryAndSubCategories)
 });
 
 // 2. Check Domain Pre-Check Query Schema
@@ -182,13 +224,14 @@ const checkDomainQuerySchema = z.object({
     })
 });
 
-// 3. List Seller Websites Query Schema
+// 3. List Seller & Public Marketplace Websites Query Schema
 const listWebsitesQuerySchema = z.object({
     query: z.object({
         page: z.coerce.number().int().min(1).optional().default(1),
         limit: z.coerce.number().int().min(1).max(100).optional().default(10),
         status: z.enum(['PENDING_VERIFICATION', 'ACTIVE', 'REJECTED', 'SUSPENDED']).optional(),
         category: z.string().trim().optional(),
+        subCategory: z.string().trim().optional(),
         country: z.string().trim().optional(),
         search: z.string().trim().toLowerCase().optional()
     })
@@ -201,80 +244,97 @@ const websiteIdParamSchema = z.object({
     })
 });
 
-// 5. Bulk CSV Row Validation Schema (Service ke andar har row ko validate karne ke liye)
-const csvWebsiteRowSchema = z.object({
-    domain: domainFieldSchema,
-    country: z
-        .string({ error: 'Country is mandatory', required_error: 'Country is mandatory' })
-        .trim()
-        .min(2, 'Country is mandatory and must be at least 2 characters'),
-    otherCountriesCount: z.preprocess(
-        (val) => (val === '' || val === undefined || val === null ? 0 : Number(val)),
-        z.number().int().min(0).default(0)
-    ),
-    category: z
-        .string()
-        .trim()
-        .optional()
-        .transform((val) => (val && val.length > 0 ? val : 'All')),
-    price: z.coerce
-        .number({ error: 'Price must be a valid number', invalid_type_error: 'Price must be a valid number' })
-        .min(5, 'Price must be between $5 and $20,000')
-        .max(20000, 'Price must be between $5 and $20,000'),
-    contentWritingPrice: z.preprocess(
-        (val) => (val === '' || val === undefined || val === null ? 0 : Number(val)),
-        z.number().nonnegative('Content writing price cannot be negative').default(0)
-    ),
-    turnaroundDays: z.preprocess(
-        (val) => (val === '' || val === undefined || val === null ? 3 : Number(val)),
-        z
-            .number({ error: 'Turnaround days must be a number', invalid_type_error: 'Turnaround days must be a number' })
-            .int('Turnaround days must be an integer')
-            .min(1, 'Turnaround days must be between 1 and 30 days')
-            .max(30, 'Turnaround days must be between 1 and 30 days')
-    ),
-    maxLinksAllowed: z.preprocess(
-        (val) => (val === '' || val === undefined || val === null ? 2 : Number(val)),
-        z.number().int().min(1).max(5).default(2)
-    ),
-    linkType: z.preprocess(
-        (val) => (val === '' || val === undefined || val === null ? 'DoFollow' : String(val).trim()),
-        z.enum(['DoFollow', 'NoFollow']).default('DoFollow')
-    ),
-    language: z
-        .string()
-        .trim()
-        .optional()
-        .transform((val) => (val && val.length > 0 ? val : 'English')),
+// 5. Bulk CSV Row Validation Schema (Supports pipe '|' or comma ',' separated subCategories)
+const csvWebsiteRowSchema = z
+    .object({
+        domain: domainFieldSchema,
+        country: z
+            .string({ error: 'Country is mandatory', required_error: 'Country is mandatory' })
+            .trim()
+            .min(2, 'Country is mandatory and must be at least 2 characters'),
+        otherCountriesCount: z.preprocess(
+            (val) => (val === '' || val === undefined || val === null ? 0 : Number(val)),
+            z.number().int().min(0).default(0)
+        ),
+        category: z.enum(VALID_CATEGORY_NAMES, {
+            error: `Category must be one of: ${VALID_CATEGORY_NAMES.join(', ')}`,
+            required_error: 'Category is mandatory in CSV'
+        }),
+        subCategories: z.preprocess(
+            (val) => {
+                if (Array.isArray(val)) return val.map((s) => String(s).trim()).filter(Boolean);
+                if (typeof val === 'string' && val.trim().length > 0) {
+                    return val
+                        .split(/[|,]/)
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                }
+                return [];
+            },
+            z
+                .array(z.string())
+                .min(1, 'At least 1 subcategory is required in CSV (e.g. Guest Posts|Local SEO)')
+                .transform((arr) => [...new Set(arr)])
+        ),
+        price: z.coerce
+            .number({ error: 'Price must be a valid number', invalid_type_error: 'Price must be a valid number' })
+            .min(5, 'Price must be between $5 and $20,000')
+            .max(20000, 'Price must be between $5 and $20,000'),
+        contentWritingPrice: z.preprocess(
+            (val) => (val === '' || val === undefined || val === null ? 0 : Number(val)),
+            z.number().nonnegative('Content writing price cannot be negative').default(0)
+        ),
+        turnaroundDays: z.preprocess(
+            (val) => (val === '' || val === undefined || val === null ? 3 : Number(val)),
+            z
+                .number({ error: 'Turnaround days must be a number', invalid_type_error: 'Turnaround days must be a number' })
+                .int('Turnaround days must be an integer')
+                .min(1, 'Turnaround days must be between 1 and 30 days')
+                .max(30, 'Turnaround days must be between 1 and 30 days')
+        ),
+        maxLinksAllowed: z.preprocess(
+            (val) => (val === '' || val === undefined || val === null ? 2 : Number(val)),
+            z.number().int().min(1).max(5).default(2)
+        ),
+        linkType: z.preprocess(
+            (val) => (val === '' || val === undefined || val === null ? 'DoFollow' : String(val).trim()),
+            z.enum(['DoFollow', 'NoFollow']).default('DoFollow')
+        ),
+        language: z
+            .string()
+            .trim()
+            .optional()
+            .transform((val) => (val && val.length > 0 ? val : 'English')),
 
-    // Metrics
-    mozDA: csvOptionalMetricScore('Moz DA'),
-    ahrefsDR: csvOptionalMetricScore('Ahrefs DR'),
-    semrushAS: csvOptionalMetricScore('Semrush AS'),
+        // Metrics
+        mozDA: csvOptionalMetricScore('Moz DA'),
+        ahrefsDR: csvOptionalMetricScore('Ahrefs DR'),
+        semrushAS: csvOptionalMetricScore('Semrush AS'),
 
-    // Traffic, Backlinks & Domain Info
-    monthlyTraffic: optionalNullableString.default(null),
-    semrushTraffic: optionalNullableString.default(null),
-    ahrefsTraffic: optionalNullableString.default(null),
-    followedBacklinks: optionalNullableString.default(null),
-    noFollowedBacklinks: optionalNullableString.default(null),
-    domainAge: optionalNullableString.default(null),
-    totalDeals: z.preprocess(
-        (val) => (val === '' || val === undefined || val === null ? 0 : Number(val)),
-        z.number().int().min(0).default(0)
-    ),
-    samplePostUrl: z
-        .string()
-        .trim()
-        .url('Sample post URL must be a valid URL')
-        .optional()
-        .nullable()
-        .or(z.literal(''))
-        .transform((val) => (val === '' ? null : val ?? null))
-});
+        // Traffic, Backlinks & Domain Info
+        monthlyTraffic: optionalNullableString.default(null),
+        semrushTraffic: optionalNullableString.default(null),
+        ahrefsTraffic: optionalNullableString.default(null),
+        followedBacklinks: optionalNullableString.default(null),
+        noFollowedBacklinks: optionalNullableString.default(null),
+        domainAge: optionalNullableString.default(null),
+        totalDeals: z.preprocess(
+            (val) => (val === '' || val === undefined || val === null ? 0 : Number(val)),
+            z.number().int().min(0).default(0)
+        ),
+        samplePostUrl: z
+            .string()
+            .trim()
+            .url('Sample post URL must be a valid URL')
+            .optional()
+            .nullable()
+            .or(z.literal(''))
+            .transform((val) => (val === '' ? null : val ?? null))
+    })
+    .superRefine(validateCategoryAndSubCategories);
 
 // ============================================================================
-// NEW: ADMIN VALIDATION SCHEMAS (Added Here)
+// NEW: ADMIN & CATEGORY DROPDOWN VALIDATION SCHEMAS
 // ============================================================================
 
 // 6. Admin List All Websites Query Schema
@@ -285,6 +345,7 @@ const adminListWebsitesQuerySchema = z.object({
         status: z.enum(['PENDING_VERIFICATION', 'ACTIVE', 'REJECTED', 'SUSPENDED']).optional(),
         sellerId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Seller ID format').optional(),
         category: z.string().trim().optional(),
+        subCategory: z.string().trim().optional(),
         country: z.string().trim().optional(),
         search: z.string().trim().toLowerCase().optional()
     })
@@ -295,23 +356,53 @@ const adminReviewWebsiteSchema = z.object({
     params: z.object({
         websiteId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Website ID format')
     }),
-    body: z.object({
-        status: z.enum(['PENDING_VERIFICATION', 'ACTIVE', 'REJECTED', 'SUSPENDED'], {
-            error: 'Status must be ACTIVE, REJECTED, SUSPENDED, or PENDING_VERIFICATION',
-            required_error: 'Status is required'
-        }),
-        adminReviewNotes: optionalNullableString,
-        mozDA: z.coerce.number().int().min(0).max(100).nullable().optional(),
-        ahrefsDR: z.coerce.number().int().min(0).max(100).nullable().optional(),
-        semrushAS: z.coerce.number().int().min(0).max(100).nullable().optional(),
-        monthlyTraffic: optionalNullableString,
-        semrushTraffic: optionalNullableString,
-        ahrefsTraffic: optionalNullableString,
-        followedBacklinks: optionalNullableString,
-        noFollowedBacklinks: optionalNullableString,
-        domainAge: optionalNullableString,
-        otherCountriesCount: z.coerce.number().int().min(0).optional(),
-        totalDeals: z.coerce.number().int().min(0).optional()
+    body: z
+        .object({
+            status: z.enum(['PENDING_VERIFICATION', 'ACTIVE', 'REJECTED', 'SUSPENDED'], {
+                error: 'Status must be ACTIVE, REJECTED, SUSPENDED, or PENDING_VERIFICATION',
+                required_error: 'Status is required'
+            }),
+            adminReviewNotes: optionalNullableString,
+            category: z.enum(VALID_CATEGORY_NAMES).optional(),
+            subCategories: z
+                .array(z.string().trim().min(1))
+                .min(1, 'At least 1 subcategory is required')
+                .transform((arr) => [...new Set(arr)])
+                .optional(),
+            mozDA: z.coerce.number().int().min(0).max(100).nullable().optional(),
+            ahrefsDR: z.coerce.number().int().min(0).max(100).nullable().optional(),
+            semrushAS: z.coerce.number().int().min(0).max(100).nullable().optional(),
+            monthlyTraffic: optionalNullableString,
+            semrushTraffic: optionalNullableString,
+            ahrefsTraffic: optionalNullableString,
+            followedBacklinks: optionalNullableString,
+            noFollowedBacklinks: optionalNullableString,
+            domainAge: optionalNullableString,
+            otherCountriesCount: z.coerce.number().int().min(0).optional(),
+            totalDeals: z.coerce.number().int().min(0).optional()
+        })
+        .superRefine((data, ctx) => {
+            if (data.category || data.subCategories) {
+                if (!data.category || !data.subCategories) {
+                    ctx.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        path: ['subCategories'],
+                        message: 'Both category and subCategories must be provided together when updating category'
+                    });
+                    return;
+                }
+                validateCategoryAndSubCategories(data, ctx);
+            }
+        })
+});
+
+// 8. Get Subcategories by Main Category Query Schema (Dropdown 2)
+const getSubCategoriesQuerySchema = z.object({
+    query: z.object({
+        category: z.enum(VALID_CATEGORY_NAMES, {
+            error: `Please provide a valid category (${VALID_CATEGORY_NAMES.join(', ')})`,
+            required_error: 'Category query parameter is required'
+        })
     })
 });
 
@@ -322,5 +413,6 @@ module.exports = {
     websiteIdParamSchema,
     csvWebsiteRowSchema,
     adminListWebsitesQuerySchema,
-    adminReviewWebsiteSchema
+    adminReviewWebsiteSchema,
+    getSubCategoriesQuerySchema
 };
