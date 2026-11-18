@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { VALID_CATEGORY_NAMES } = require('../constants/category.constant');
 
 const websiteSchema = new mongoose.Schema(
     {
@@ -15,10 +16,25 @@ const websiteSchema = new mongoose.Schema(
             trim: true,
             index: true
         },
-        category: {
+       category: {
             type: String,
-            default: 'All',
+            required: [true, 'Category is required'],
+            enum: {
+                values: VALID_CATEGORY_NAMES,
+                message: '{VALUE} is not a valid category'
+            },
             trim: true,
+            index: true
+        },
+        subCategories: {
+            type: [String],
+            required: [true, 'At least one subcategory is required'],
+            validate: {
+                validator: function (arr) {
+                    return Array.isArray(arr) && arr.length >= 1;
+                },
+                message: 'Please select at least 1 subcategory'
+            },
             index: true
         },
         country: {
@@ -125,6 +141,6 @@ const websiteSchema = new mongoose.Schema(
 websiteSchema.index({ sellerId: 1, domain: 1 }, { unique: true });
 
 // 2. Marketplace Public Listing Index: Active websites filter & sort fast karne ke liye
-websiteSchema.index({ status: 1, category: 1, price: 1 });
+websiteSchema.index({ status: 1, category: 1,subCategories: 1, price: 1 });
 
 module.exports = mongoose.model('Website', websiteSchema);

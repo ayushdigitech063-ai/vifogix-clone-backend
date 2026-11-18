@@ -1,5 +1,6 @@
 const asyncHandler = require('../../utils/asyncHandler');
 const ApiError = require('../../utils/ApiError');
+const { WEBSITE_CATEGORIES, VALID_CATEGORY_NAMES } = require('../../constants/category.constant');
 const {
     getDomainRegistrationHistory,
     addSingleWebsite,
@@ -10,6 +11,33 @@ const {
     getAdminWebsiteById,
     reviewAndVerifyWebsite
 } = require('../../services/website.service');
+
+// 0A. Public: Fetch Main Categories List for Dropdown 1 (GET /categories)
+const getMainCategories = asyncHandler(async (req, res) => {
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Main categories fetched successfully',
+        data: {
+            categories: VALID_CATEGORY_NAMES
+        }
+    });
+});
+
+// 0B. Public: Fetch Subcategories for Selected Category for Dropdown 2 (GET /subcategories?category=SEO)
+const getSubCategoriesByCategory = asyncHandler(async (req, res) => {
+    const { category } = req.query;
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: `Subcategories for '${category}' fetched successfully`,
+        data: {
+            category,
+            subCategories: WEBSITE_CATEGORIES[category] || []
+        }
+    });
+});
 
 // 1. Live Check Domain Info (Validated by checkDomainQuerySchema)
 const checkDomainStats = asyncHandler(async (req, res) => {
@@ -77,7 +105,7 @@ const getMyListings = asyncHandler(async (req, res) => {
     });
 });
 
-// 5. NEW: Public / Buyer Marketplace Table ("Boost Your SEO with Trusted Guest Posts")
+// 5. Public / Buyer Marketplace Table ("Boost Your SEO with Trusted Guest Posts")
 const getMarketplaceListings = asyncHandler(async (req, res) => {
     const data = await getPublicMarketplaceList(req.query);
 
@@ -89,6 +117,7 @@ const getMarketplaceListings = asyncHandler(async (req, res) => {
     });
 });
 
+// 6. Admin: Get All Websites
 const getAllWebsitesForAdmin = asyncHandler(async (req, res) => {
     const data = await getAdminWebsitesList(req.query);
 
@@ -100,7 +129,7 @@ const getAllWebsitesForAdmin = asyncHandler(async (req, res) => {
     });
 });
 
-// 7. Admin: Kisi 1 website ki detail dekhne ke liye
+// 7. Admin: Get Single Website Details
 const getWebsiteDetailsForAdmin = asyncHandler(async (req, res) => {
     const website = await getAdminWebsiteById(req.params.websiteId);
 
@@ -112,7 +141,7 @@ const getWebsiteDetailsForAdmin = asyncHandler(async (req, res) => {
     });
 });
 
-// 8. Admin: Website ko ACTIVE (Approve) ya REJECTED karne ke liye
+// 8. Admin: Approve / Reject Website
 const updateWebsiteVerificationStatus = asyncHandler(async (req, res) => {
     const updatedWebsite = await reviewAndVerifyWebsite(req.params.websiteId, req.body);
 
@@ -125,6 +154,8 @@ const updateWebsiteVerificationStatus = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+    getMainCategories,
+    getSubCategoriesByCategory,
     checkDomainStats,
     createSingleListing,
     uploadBulkCsvListings,
