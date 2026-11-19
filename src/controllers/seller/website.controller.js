@@ -9,7 +9,8 @@ const {
     getPublicMarketplaceList,
     getAdminWebsitesList,
     getAdminWebsiteById,
-    reviewAndVerifyWebsite
+    reviewAndVerifyWebsite,
+    getPublicWebsiteDetailsById
 } = require('../../services/website.service');
 
 // 0A. Public: Fetch Main Categories List for Dropdown 1 (GET /categories)
@@ -153,6 +154,17 @@ const updateWebsiteVerificationStatus = asyncHandler(async (req, res) => {
     });
 });
 
+const getPublicWebsiteDetails = asyncHandler(async (req, res) => {
+    const website = await getPublicWebsiteDetailsById(req.params.websiteId);
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Website details fetched successfully',
+        data: { website }
+    });
+});
+
 module.exports = {
     getMainCategories,
     getSubCategoriesByCategory,
@@ -163,5 +175,6 @@ module.exports = {
     getMarketplaceListings,
     getAllWebsitesForAdmin,
     getWebsiteDetailsForAdmin,
-    updateWebsiteVerificationStatus
+    updateWebsiteVerificationStatus,
+    getPublicWebsiteDetails
 };

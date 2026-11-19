@@ -6,7 +6,7 @@ const {
     createSingleListing,
     uploadBulkCsvListings,
     getMyListings,
-    getMarketplaceListings,
+    // getMarketplaceListings,
     getMainCategories,
     getSubCategoriesByCategory
 } = require('../controllers/seller/website.controller');
@@ -24,7 +24,7 @@ const {
     getSubCategoriesQuerySchema
 } = require('../validations/website.validation');
 
-router.get('/marketplace', validate(listWebsitesQuerySchema), getMarketplaceListings);
+// router.get('/marketplace', validate(listWebsitesQuerySchema), getMarketplaceListings);
 router.get('/categories', getMainCategories);
 router.get('/subcategories', validate(getSubCategoriesQuerySchema), getSubCategoriesByCategory);
 

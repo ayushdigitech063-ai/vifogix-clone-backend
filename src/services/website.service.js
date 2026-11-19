@@ -7,10 +7,10 @@ const { csvWebsiteRowSchema } = require('../validations/website.validation');
 
 const MAX_CSV_ROWS = 500;
 
-// Helper: Escape special regex characters to prevent MongoDB ReDoS / Syntax crashes
+
 const escapeRegex = (str = '') => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// Helper: Clean Zod v4 raw messages inside CSV row errors
+
 const cleanCsvIssueMessage = (field, rawMessage = '') => {
     if (rawMessage.includes('received undefined') || rawMessage === 'Required') {
         return `${field} is required`;
@@ -21,7 +21,7 @@ const cleanCsvIssueMessage = (field, rawMessage = '') => {
     return rawMessage;
 };
 
-// 1. Pre-Check: Domain already sanitized by Zod middleware
+
 const getDomainRegistrationHistory = async (domain) => {
     const previousListings = await Website.find({ domain })
         .select('createdAt price isVerified status')
@@ -41,11 +41,11 @@ const getDomainRegistrationHistory = async (domain) => {
     };
 };
 
-// 2. Single Website Add (All inputs already validated & sanitized by addWebsiteSchema)
+
 const addSingleWebsite = async (sellerId, validatedData) => {
     const { domain } = validatedData;
 
-    // Business Rule: Duplicate listing check for the same seller
+    
     const alreadyAddedBySelf = await Website.findOne({ sellerId, domain }).lean();
     if (alreadyAddedBySelf) {
         throw ApiError(409, `You have already registered this domain '${domain}'.`, [
@@ -72,7 +72,6 @@ const addSingleWebsite = async (sellerId, validatedData) => {
         linkType: validatedData.linkType ?? 'DoFollow',
         samplePostUrl: validatedData.samplePostUrl ?? null,
 
-        // SEO Metrics & Marketplace Table UI Fields
         mozDA: validatedData.mozDA ?? null,
         ahrefsDR: validatedData.ahrefsDR ?? null,
         semrushAS: validatedData.semrushAS ?? null,
@@ -100,7 +99,7 @@ const addSingleWebsite = async (sellerId, validatedData) => {
     };
 };
 
-// 3. Bulk CSV Upload (Validated via shared csvWebsiteRowSchema)
+
 const processBulkCsvUpload = async (sellerId, filePath) => {
     return new Promise((resolve, reject) => {
         const rows = [];
@@ -151,7 +150,7 @@ const processBulkCsvUpload = async (sellerId, filePath) => {
                 );
                 if (!hasAnyValue) return;
 
-                // Validate row using centralized Zod schema
+                
                 const parsed = csvWebsiteRowSchema.safeParse(mappedInput);
                 if (!parsed.success) {
                     const issues = parsed.error.issues || parsed.error.errors || [];
@@ -269,7 +268,7 @@ const processBulkCsvUpload = async (sellerId, filePath) => {
     });
 };
 
-// 4. Seller Listings with Filters & Pagination
+
 const getSellerWebsitesList = async (sellerId, { page = 1, limit = 10, status, category, subCategory, country, search }) => {
     const filter = { sellerId };
 
@@ -299,7 +298,7 @@ const getSellerWebsitesList = async (sellerId, { page = 1, limit = 10, status, c
     };
 };
 
-// 5. Public / Buyer Marketplace Listings ("Boost Your SEO with Trusted Guest Posts")
+
 const getPublicMarketplaceList = async ({ page = 1, limit = 10, category, subCategory, country, search }) => {
     const activeSellerIds = await User.find({
         role: 'SELLER',
@@ -343,7 +342,7 @@ const getPublicMarketplaceList = async ({ page = 1, limit = 10, category, subCat
     };
 };
 
-// 6. Admin: Get All Websites with Seller Info + Status Summary Counts
+
 const getAdminWebsitesList = async ({ page = 1, limit = 10, status, sellerId, category, subCategory, country, search }) => {
     const filter = {};
 
@@ -396,7 +395,7 @@ const getAdminWebsitesList = async ({ page = 1, limit = 10, status, sellerId, ca
     };
 };
 
-// 7. Admin: Get Single Website Details by ID
+
 const getAdminWebsiteById = async (websiteId) => {
     const website = await Website.findById(websiteId)
         .populate('sellerId', 'name email role socialProfiles status isDeleted createdAt')
@@ -409,7 +408,7 @@ const getAdminWebsiteById = async (websiteId) => {
     return website;
 };
 
-// 8. Admin: Approve (ACTIVE) / Reject Website & Update SEO Metrics
+
 const reviewAndVerifyWebsite = async (websiteId, reviewData) => {
     const website = await Website.findById(websiteId);
     if (!website) {
@@ -430,7 +429,6 @@ const reviewAndVerifyWebsite = async (websiteId, reviewData) => {
         website.isVerified = false;
     }
 
-    // Update any SEO metrics or category/subCategories provided by Admin during review
     Object.keys(seoMetrics).forEach((key) => {
         if (seoMetrics[key] !== undefined) {
             website[key] = seoMetrics[key];
@@ -442,6 +440,39 @@ const reviewAndVerifyWebsite = async (websiteId, reviewData) => {
     return website;
 };
 
+
+
+const getPublicWebsiteDetailsById = async (websiteId) => {
+    const website = await Website.findOne({
+        _id: websiteId,
+        status: 'ACTIVE',
+        isVerified: true
+    })
+        .select('-adminReviewNotes -__v')
+        .populate('sellerId', 'name status isDeleted')
+        .lean();
+
+    // Agar website nahi mili ya seller deleted/inactive ho gaya hai
+    if (
+        !website ||
+        !website.sellerId ||
+        website.sellerId.isDeleted ||
+        website.sellerId.status !== 'ACTIVE'
+    ) {
+        throw ApiError(404, 'Website not found or currently unavailable');
+    }
+
+    // Seller ki sensitive info hata kar clean object return karo
+    const { sellerId, ...websiteDetails } = website;
+
+    return {
+        ...websiteDetails,
+        seller: {
+            _id: sellerId._id,
+            name: sellerId.name
+        }
+    };
+};
 module.exports = {
     getDomainRegistrationHistory,
     addSingleWebsite,
@@ -450,5 +481,6 @@ module.exports = {
     getPublicMarketplaceList,
     getAdminWebsitesList,
     getAdminWebsiteById,
-    reviewAndVerifyWebsite
+    reviewAndVerifyWebsite,
+    getPublicWebsiteDetailsById
 };

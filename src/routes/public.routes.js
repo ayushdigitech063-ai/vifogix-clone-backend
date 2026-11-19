@@ -3,9 +3,17 @@ const router = express.Router();
 
 // Controllers
 const { fetchFooter } = require('../controllers/admin/footer.controller');
-// const { getPublicMarketplaceWebsites } = require('../controllers/seller/website.controller');
+const { getMarketplaceListings,getPublicWebsiteDetails } = require('../controllers/seller/website.controller');
+const { listPublicPackages } = require('../controllers/admin/package.controller');
 // const { listPublicPortfolios } = require('../controllers/portfolio.controller');
 // const { submitContactInquiry } = require('../controllers/contact.controller');
+
+
+const validate = require('../middlewares/validate.middleware');
+const {
+listWebsitesQuerySchema,
+websiteIdParamSchema
+} = require('../validations/website.validation');
 
 
 // 1. Footer Data
@@ -14,7 +22,8 @@ router.get('/footer', fetchFooter);
 
 // 2. Public Website Marketplace
 // GET /api/v1/public/marketplace
-// router.get('/marketplace', getPublicMarketplaceWebsites);
+router.get('/marketplace', validate(listWebsitesQuerySchema), getMarketplaceListings);
+router.get('/marketplace/:websiteId', validate(websiteIdParamSchema), getPublicWebsiteDetails);
 
 // 3. Public Portfolio Projects
 // GET /api/v1/public/portfolio
@@ -23,5 +32,8 @@ router.get('/footer', fetchFooter);
 // 4. Public Contact Us Form Submission
 // POST /api/v1/public/contact
 // router.post('/contact', submitContactInquiry);
+
+// package listing 
+router.get('/packages', listPublicPackages);
 
 module.exports = router;

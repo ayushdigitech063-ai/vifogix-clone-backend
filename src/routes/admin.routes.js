@@ -34,6 +34,13 @@ const {
 } = require('../controllers/seller/website.controller');
 
 const {
+    createPackage,
+    listAdminPackages,
+    modifyPackage,
+    removePackage
+} = require('../controllers/admin/package.controller');
+
+const {
     adminListWebsitesQuerySchema,
     websiteIdParamSchema,
     adminReviewWebsiteSchema
@@ -42,6 +49,12 @@ const {
 const {
     updateFooterSchema
 } = require('../validations/footer.validation');
+
+const {
+    createPackageSchema,
+    updatePackageSchema,
+    packageIdParamSchema
+} = require('../validations/package.validation');
 
 
 
@@ -109,5 +122,11 @@ router.patch('/websites/:websiteId/review', validate(adminReviewWebsiteSchema), 
 
 // Footer Management Section (Admin Only Update)
 router.patch('/footer', validate(updateFooterSchema), modifyFooter);
+
+
+router.post('/packages', validate(createPackageSchema), createPackage);
+router.get('/packages', listAdminPackages);
+router.patch('/packages/:packageId', validate(updatePackageSchema), modifyPackage);
+router.delete('/packages/:packageId', validate(packageIdParamSchema), removePackage)
 
 module.exports = router;
