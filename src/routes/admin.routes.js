@@ -57,6 +57,18 @@ const {
 } = require('../validations/package.validation');
 
 
+const {
+    getAllPressReleasesAdmin,
+    getPressReleaseByIdAdmin,
+    reviewPressReleaseStatus
+} = require('../controllers/seller/pressRelease.controller');
+
+const {
+    reviewPressReleaseStatusSchema,
+    prIdParamSchema
+} = require('../validations/pressRelease.validation');
+
+
 
 // Middlewares
 const validate = require('../middlewares/validate.middleware');
@@ -128,5 +140,9 @@ router.post('/packages', validate(createPackageSchema), createPackage);
 router.get('/packages', listAdminPackages);
 router.patch('/packages/:packageId', validate(updatePackageSchema), modifyPackage);
 router.delete('/packages/:packageId', validate(packageIdParamSchema), removePackage)
+
+router.get('/press-releases', getAllPressReleasesAdmin);
+router.get('/press-releases/:prId', validate(prIdParamSchema), getPressReleaseByIdAdmin);
+router.patch('/press-releases/:prId/status', validate(reviewPressReleaseStatusSchema), reviewPressReleaseStatus);
 
 module.exports = router;

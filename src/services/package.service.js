@@ -1,7 +1,7 @@
 const Package = require('../models/package.model');
 const ApiError = require('../utils/ApiError');
 
-// Helper: Clean & deduplicate features array
+
 const sanitizeFeatures = (features = []) => {
     const cleaned = [...new Set(features.map((f) => f.trim()).filter(Boolean))];
     if (cleaned.length === 0) {
@@ -10,7 +10,7 @@ const sanitizeFeatures = (features = []) => {
     return cleaned;
 };
 
-// 1. Admin: Create Single Package
+
 const createNewPackage = async (payload) => {
     const normalizedName = payload.name.toUpperCase().trim();
 

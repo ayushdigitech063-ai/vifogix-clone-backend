@@ -8,6 +8,13 @@ const { listPublicPackages } = require('../controllers/admin/package.controller'
 // const { listPublicPortfolios } = require('../controllers/portfolio.controller');
 // const { submitContactInquiry } = require('../controllers/contact.controller');
 
+const {
+    getPublicPressReleases,
+    getPublicPressReleaseById
+} = require('../controllers/seller/pressRelease.controller');
+
+const { prIdParamSchema } = require('../validations/pressRelease.validation');
+
 
 const validate = require('../middlewares/validate.middleware');
 const {
@@ -35,5 +42,9 @@ router.get('/marketplace/:websiteId', validate(websiteIdParamSchema), getPublicW
 
 // package listing 
 router.get('/packages', listPublicPackages);
+
+
+router.get('/press-releases', getPublicPressReleases);
+router.get('/press-releases/:prId', validate(prIdParamSchema), getPublicPressReleaseById);
 
 module.exports = router;

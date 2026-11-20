@@ -25,7 +25,7 @@ const createPackageSchema = z.object({
                 .min(1, 'At least one feature is required'),
             isPopular: z.boolean().optional().default(false),
             badgeText: z.string().trim().max(30).nullable().optional(),
-            buttonText: z.string().trim().max(30).optional().default('Get Started'),
+            // buttonText: z.string().trim().max(30).optional().default('Get Started'),
             displayOrder: z.number().int().min(1, 'Display order must be at least 1').optional(),
             isActive: z.boolean().optional().default(true)
         })
@@ -54,7 +54,7 @@ const updatePackageSchema = z.object({
             features: z.array(z.string().trim().min(1)).min(1).optional(),
             isPopular: z.boolean().optional(),
             badgeText: z.string().trim().max(30).nullable().optional(),
-            buttonText: z.string().trim().max(30).optional(),
+            // buttonText: z.string().trim().max(30).optional(),
             displayOrder: z.number().int().min(1, 'Display order must be at least 1').optional(),
             isActive: z.boolean().optional()
         })

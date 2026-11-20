@@ -50,11 +50,11 @@ const packageSchema = new mongoose.Schema(
             default: null,
             trim: true
         },
-        buttonText: {
-            type: String,
-            default: 'Get Started',
-            trim: true
-        },
+        // buttonText: {
+        //     type: String,
+        //     default: 'Get Started',
+        //     trim: true
+        // },
         displayOrder: {
             type: Number,
             default: 1,
