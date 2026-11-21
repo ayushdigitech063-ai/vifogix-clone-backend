@@ -4,7 +4,8 @@ const {
     getAdminPackagesList,
     getPublicPackagesList,
     updatePackageById,
-    deletePackageById
+    deletePackageById,
+    updatePackageStatusById
 } = require('../../services/package.service');
 
 // 1. Admin: Create Single Package (POST /api/v1/admin/packages)
@@ -67,10 +68,22 @@ const removePackage = asyncHandler(async (req, res) => {
     });
 });
 
+const changePackageStatus = asyncHandler(async (req, res) => {
+    const pkg = await updatePackageStatusById(req.params.packageId, req.body.isActive);
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: `Package ${pkg.isActive ? 'activated' : 'deactivated'} successfully`,
+        data: { package: pkg }
+    });
+});
+
 module.exports = {
     createPackage,
     listAdminPackages,
     listPublicPackages,
     modifyPackage,
-    removePackage
+    removePackage,
+    changePackageStatus
 };

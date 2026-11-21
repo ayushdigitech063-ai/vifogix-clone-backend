@@ -178,10 +178,29 @@ const deletePackageById = async (packageId) => {
     return { deletedPackageId: packageId, name: deleted.name };
 };
 
+const updatePackageStatusById = async (packageId, isActive) => {
+    const pkg = await Package.findById(packageId);
+    if (!pkg) {
+        throw ApiError(404, 'Package not found');
+    }
+
+    pkg.isActive = isActive;
+
+    // Agar package ko deactivate kar rahe hain toh 'Most popular' badge bhi hata do
+    if (!isActive && pkg.isPopular) {
+        pkg.isPopular = false;
+        pkg.badgeText = null;
+    }
+
+    await pkg.save();
+    return pkg;
+};
+
 module.exports = {
     createNewPackage,
     getAdminPackagesList,
     getPublicPackagesList,
     updatePackageById,
-    deletePackageById
+    deletePackageById,
+    updatePackageStatusById
 };

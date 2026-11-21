@@ -37,7 +37,8 @@ const {
     createPackage,
     listAdminPackages,
     modifyPackage,
-    removePackage
+    removePackage,
+    changePackageStatus
 } = require('../controllers/admin/package.controller');
 
 const {
@@ -53,7 +54,8 @@ const {
 const {
     createPackageSchema,
     updatePackageSchema,
-    packageIdParamSchema
+    packageIdParamSchema,
+    togglePackageStatusSchema
 } = require('../validations/package.validation');
 
 
@@ -140,6 +142,7 @@ router.post('/packages', validate(createPackageSchema), createPackage);
 router.get('/packages', listAdminPackages);
 router.patch('/packages/:packageId', validate(updatePackageSchema), modifyPackage);
 router.delete('/packages/:packageId', validate(packageIdParamSchema), removePackage)
+router.patch( '/packages/:packageId/status', validate(togglePackageStatusSchema),  changePackageStatus);
 
 router.get('/press-releases', getAllPressReleasesAdmin);
 router.get('/press-releases/:prId', validate(prIdParamSchema), getPressReleaseByIdAdmin);
