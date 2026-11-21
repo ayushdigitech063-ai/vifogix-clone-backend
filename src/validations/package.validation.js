@@ -70,8 +70,23 @@ const packageIdParamSchema = z.object({
     })
 });
 
+
+const togglePackageStatusSchema = z.object({
+    params: z.object({
+        packageId: z.string().regex(objectIdRegex, 'Invalid Package ID format')
+    }),
+    body: z.object({
+        isActive: z.boolean({
+            error: 'isActive boolean value is required',
+            required_error: 'isActive boolean value is required'
+        })
+    })
+});
+
+
 module.exports = {
     createPackageSchema,
     updatePackageSchema,
-    packageIdParamSchema
+    packageIdParamSchema,
+    togglePackageStatusSchema
 };
