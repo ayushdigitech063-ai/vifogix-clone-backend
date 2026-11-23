@@ -8,7 +8,9 @@ const {
     getMyListings,
     // getMarketplaceListings,
     getMainCategories,
-    getSubCategoriesByCategory
+    getSubCategoriesByCategory,
+    updateMyListing,
+    getMyWebsiteDetails
 } = require('../controllers/seller/website.controller');
 
 const {
@@ -18,7 +20,6 @@ const {
     updateMyPressRelease,
     deleteMyPressRelease
 } = require('../controllers/seller/pressRelease.controller');
-
 
 const {
     createPressReleaseSchema,
@@ -36,7 +37,9 @@ const {
     addWebsiteSchema,
     checkDomainQuerySchema,
     listWebsitesQuerySchema,
-    getSubCategoriesQuerySchema
+    getSubCategoriesQuerySchema,
+    updateWebsiteSchema,
+    websiteSlugParamSchema
 } = require('../validations/website.validation');
 
 // router.get('/marketplace', validate(listWebsitesQuerySchema), getMarketplaceListings);
@@ -49,7 +52,8 @@ router.get('/check-domain', validate(checkDomainQuerySchema), checkDomainStats);
 router.post('/websites', validate(addWebsiteSchema), createSingleListing);
 router.post('/websites/bulk-csv', uploadCsv.single('file'), uploadBulkCsvListings);
 router.get('/websites', validate(listWebsitesQuerySchema), getMyListings);
-
+router.patch('/websites/:slug', validate(updateWebsiteSchema), updateMyListing);
+router.get('/websites/:slug', validate(websiteSlugParamSchema), getMyWebsiteDetails);
 
 // Press Release Management (Seller Only)
 router.post('/press-releases', validate(createPressReleaseSchema), addPressRelease);
@@ -57,7 +61,5 @@ router.get('/press-releases', getMyPressReleases);
 router.get('/press-releases/:prId', validate(prIdParamSchema), getMyPressReleaseById);
 router.patch('/press-releases/:prId', validate(updatePressReleaseSchema), updateMyPressRelease);
 router.delete('/press-releases/:prId', validate(prIdParamSchema), deleteMyPressRelease);
-
-
 
 module.exports = router;

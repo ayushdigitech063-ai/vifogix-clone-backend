@@ -4,6 +4,7 @@ const Website = require('../models/website.model');
 const User = require('../models/user.model');
 const ApiError = require('../utils/ApiError');
 const { csvWebsiteRowSchema } = require('../validations/website.validation');
+const { generateDomainSlug } = require('../utils/slugify');
 
 const MAX_CSV_ROWS = 500;
 
@@ -45,7 +46,6 @@ const getDomainRegistrationHistory = async (domain) => {
 const addSingleWebsite = async (sellerId, validatedData) => {
     const { domain } = validatedData;
 
-    
     const alreadyAddedBySelf = await Website.findOne({ sellerId, domain }).lean();
     if (alreadyAddedBySelf) {
         throw ApiError(409, `You have already registered this domain '${domain}'.`, [
@@ -54,10 +54,12 @@ const addSingleWebsite = async (sellerId, validatedData) => {
     }
 
     const totalPreviousSellers = await Website.countDocuments({ domain });
+    const slug = await generateDomainSlug(Website, domain);
 
     const newWebsite = await Website.create({
         sellerId,
         domain: validatedData.domain,
+        slug,
         country: validatedData.country,
         otherCountriesCount: validatedData.otherCountriesCount ?? 0,
         category: validatedData.category,
@@ -150,7 +152,6 @@ const processBulkCsvUpload = async (sellerId, filePath) => {
                 );
                 if (!hasAnyValue) return;
 
-                
                 const parsed = csvWebsiteRowSchema.safeParse(mappedInput);
                 if (!parsed.success) {
                     const issues = parsed.error.issues || parsed.error.errors || [];
@@ -206,16 +207,25 @@ const processBulkCsvUpload = async (sellerId, filePath) => {
 
                 try {
                     const domainList = rows.map((r) => r.domain);
-                    const alreadyOwned = await Website.find({
-                        sellerId,
-                        domain: { $in: domainList }
-                    })
-                        .select('domain')
-                        .lean();
+
+                    const [alreadyOwned, existingSlugDocs] = await Promise.all([
+                        Website.find({
+                            sellerId,
+                            domain: { $in: domainList }
+                        })
+                            .select('domain')
+                            .lean(),
+                        Website.find({
+                            domain: { $in: domainList }
+                        })
+                            .select('slug')
+                            .lean()
+                    ]);
 
                     const alreadyOwnedSet = new Set(alreadyOwned.map((w) => w.domain));
                     const validRows = [];
                     const seenInCurrentBatch = new Set();
+                    const reservedSlugs = new Set(existingSlugDocs.map((w) => w.slug));
 
                     for (const row of rows) {
                         const { _rowNumber, ...cleanRowData } = row;
@@ -234,6 +244,11 @@ const processBulkCsvUpload = async (sellerId, filePath) => {
                             });
                         } else {
                             seenInCurrentBatch.add(cleanRowData.domain);
+                            cleanRowData.slug = await generateDomainSlug(
+                                Website,
+                                cleanRowData.domain,
+                                reservedSlugs
+                            );
                             validRows.push(cleanRowData);
                         }
                     }
@@ -441,10 +456,12 @@ const reviewAndVerifyWebsite = async (websiteId, reviewData) => {
 };
 
 
+const getPublicWebsiteDetailsById = async (identifier) => {
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
+    const query = isObjectId ? { _id: identifier } : { slug: identifier.toLowerCase() };
 
-const getPublicWebsiteDetailsById = async (websiteId) => {
     const website = await Website.findOne({
-        _id: websiteId,
+        ...query,
         status: 'ACTIVE',
         isVerified: true
     })
@@ -473,6 +490,58 @@ const getPublicWebsiteDetailsById = async (websiteId) => {
         }
     };
 };
+
+const updateSellerWebsiteById = async (sellerId, identifier, updateData) => {
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
+    const query = isObjectId ? { _id: identifier } : { slug: identifier.toLowerCase() };
+
+    const website = await Website.findOne({
+        ...query,
+        sellerId
+    });
+
+    if (!website) {
+        throw ApiError(404, 'Website listing not found');
+    }
+
+    if (website.status === 'SUSPENDED') {
+        throw ApiError(403, 'Suspended website listings cannot be edited. Please contact support.');
+    }
+
+    Object.assign(website, updateData);
+
+    // Sirf REJECTED listing fix hokar update ho tabhi re-verification ke liye bhejo
+    // Agar pehle se ACTIVE hai toh ACTIVE + isVerified: true hi rahegi
+    if (website.status === 'REJECTED') {
+        website.status = 'PENDING_VERIFICATION';
+        website.isVerified = false;
+        website.verifiedAt = null;
+        website.adminReviewNotes = null;
+    }
+
+    await website.save();
+
+    return website;
+};
+
+const getSellerWebsiteDetailsById = async (sellerId, identifier) => {
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
+    const query = isObjectId ? { _id: identifier } : { slug: identifier.toLowerCase() };
+
+    const website = await Website.findOne({
+        ...query,
+        sellerId
+    })
+        .select('-__v')
+        .lean();
+
+    if (!website) {
+        throw ApiError(404, 'Website listing not found');
+    }
+
+    return website;
+};
+
 module.exports = {
     getDomainRegistrationHistory,
     addSingleWebsite,
@@ -482,5 +551,7 @@ module.exports = {
     getAdminWebsitesList,
     getAdminWebsiteById,
     reviewAndVerifyWebsite,
-    getPublicWebsiteDetailsById
+    getPublicWebsiteDetailsById,
+    updateSellerWebsiteById,
+    getSellerWebsiteDetailsById
 };

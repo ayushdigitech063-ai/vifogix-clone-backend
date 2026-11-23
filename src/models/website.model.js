@@ -16,6 +16,14 @@ const websiteSchema = new mongoose.Schema(
             trim: true,
             index: true
         },
+        slug: {
+            type: String,
+            required: true,
+            unique: true,
+            lowercase: true,
+            trim: true,
+            index: true
+        },
        category: {
             type: String,
             required: [true, 'Category is required'],

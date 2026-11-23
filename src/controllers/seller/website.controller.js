@@ -10,10 +10,12 @@ const {
     getAdminWebsitesList,
     getAdminWebsiteById,
     reviewAndVerifyWebsite,
-    getPublicWebsiteDetailsById
+    getPublicWebsiteDetailsById,
+    updateSellerWebsiteById,
+    getSellerWebsiteDetailsById
 } = require('../../services/website.service');
 
-// 0A. Public: Fetch Main Categories List for Dropdown 1 (GET /categories)
+
 const getMainCategories = asyncHandler(async (req, res) => {
     return res.status(200).json({
         success: true,
@@ -25,7 +27,7 @@ const getMainCategories = asyncHandler(async (req, res) => {
     });
 });
 
-// 0B. Public: Fetch Subcategories for Selected Category for Dropdown 2 (GET /subcategories?category=SEO)
+
 const getSubCategoriesByCategory = asyncHandler(async (req, res) => {
     const { category } = req.query;
 
@@ -52,7 +54,7 @@ const checkDomainStats = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Single Website Add (Validated by addWebsiteSchema)
+
 const createSingleListing = asyncHandler(async (req, res) => {
     if (!req.user?._id) {
         throw ApiError(401, 'Unauthorized seller access');
@@ -68,7 +70,7 @@ const createSingleListing = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Bulk CSV Upload
+
 const uploadBulkCsvListings = asyncHandler(async (req, res) => {
     if (!req.user?._id) {
         throw ApiError(401, 'Unauthorized seller access');
@@ -90,7 +92,7 @@ const uploadBulkCsvListings = asyncHandler(async (req, res) => {
     });
 });
 
-// 4. View Seller Websites (Validated by listWebsitesQuerySchema)
+
 const getMyListings = asyncHandler(async (req, res) => {
     if (!req.user?._id) {
         throw ApiError(401, 'Unauthorized seller access');
@@ -106,7 +108,7 @@ const getMyListings = asyncHandler(async (req, res) => {
     });
 });
 
-// 5. Public / Buyer Marketplace Table ("Boost Your SEO with Trusted Guest Posts")
+
 const getMarketplaceListings = asyncHandler(async (req, res) => {
     const data = await getPublicMarketplaceList(req.query);
 
@@ -118,7 +120,7 @@ const getMarketplaceListings = asyncHandler(async (req, res) => {
     });
 });
 
-// 6. Admin: Get All Websites
+
 const getAllWebsitesForAdmin = asyncHandler(async (req, res) => {
     const data = await getAdminWebsitesList(req.query);
 
@@ -142,7 +144,7 @@ const getWebsiteDetailsForAdmin = asyncHandler(async (req, res) => {
     });
 });
 
-// 8. Admin: Approve / Reject Website
+
 const updateWebsiteVerificationStatus = asyncHandler(async (req, res) => {
     const updatedWebsite = await reviewAndVerifyWebsite(req.params.websiteId, req.body);
 
@@ -155,7 +157,49 @@ const updateWebsiteVerificationStatus = asyncHandler(async (req, res) => {
 });
 
 const getPublicWebsiteDetails = asyncHandler(async (req, res) => {
-    const website = await getPublicWebsiteDetailsById(req.params.websiteId);
+    const website = await getPublicWebsiteDetailsById(req.params.slug || req.params.websiteId);
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Website details fetched successfully',
+        data: { website }
+    });
+});
+
+const updateMyListing = asyncHandler(async (req, res) => {
+    if (!req.user?._id) {
+        throw ApiError(401, 'Unauthorized seller access');
+    }
+
+    const website = await updateSellerWebsiteById(
+        req.user._id,
+        req.params.slug || req.params.websiteId,
+        req.body
+    );
+
+    const message =
+        website.status === 'PENDING_VERIFICATION'
+            ? 'Website updated and submitted for verification.'
+            : 'Website updated successfully.';
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message,
+        data: { website }
+    });
+});
+
+const getMyWebsiteDetails = asyncHandler(async (req, res) => {
+    if (!req.user?._id) {
+        throw ApiError(401, 'Unauthorized seller access');
+    }
+
+    const website = await getSellerWebsiteDetailsById(
+        req.user._id,
+        req.params.slug || req.params.websiteId
+    );
 
     return res.status(200).json({
         success: true,
@@ -176,5 +220,7 @@ module.exports = {
     getAllWebsitesForAdmin,
     getWebsiteDetailsForAdmin,
     updateWebsiteVerificationStatus,
-    getPublicWebsiteDetails
+    getPublicWebsiteDetails,
+    updateMyListing,
+    getMyWebsiteDetails
 };
