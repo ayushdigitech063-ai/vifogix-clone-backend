@@ -17,6 +17,7 @@ const {
     updateInquiry,
     removeInquiry
 } = require('../controllers/contact.controller');
+
 const {
     createPortfolio,
     modifyPortfolio,
@@ -33,12 +34,15 @@ const {
     updateWebsiteVerificationStatus
 } = require('../controllers/seller/website.controller');
 
+// Updated Package Controller Imports
 const {
     createPackage,
-    listAdminPackages,
+    listManagedPackages,
+    getManagedPackage,
     modifyPackage,
     removePackage,
-    changePackageStatus
+    changePackageStatus,
+    reviewPackageVerification
 } = require('../controllers/admin/package.controller');
 
 const {
@@ -51,13 +55,15 @@ const {
     updateFooterSchema
 } = require('../validations/footer.validation');
 
+// Updated Package Validation Imports
 const {
     createPackageSchema,
     updatePackageSchema,
-    packageIdParamSchema,
-    togglePackageStatusSchema
+    packageSlugParamSchema,
+    togglePackageStatusSchema,
+    reviewPackageSchema,
+    listPackagesQuerySchema
 } = require('../validations/package.validation');
-
 
 const {
     getAllPressReleasesAdmin,
@@ -69,8 +75,6 @@ const {
     reviewPressReleaseStatusSchema,
     prIdParamSchema
 } = require('../validations/pressRelease.validation');
-
-
 
 // Middlewares
 const validate = require('../middlewares/validate.middleware');
@@ -88,15 +92,11 @@ const {
     updateUserStatusSchema
 } = require('../validations/auth.validation');
 const { portfolioIdParamSchema } = require('../validations/portfolio.validation');
-const {
-} = require('../validations/contact.validation');
 
 // Cookie-based & Public Auth Routes (verifyJWT ke upar)
 router.post('/auth/login', loginLimiter, validate(loginSchema), login);
 router.post('/auth/refresh-token', refreshAccessToken);
 router.post('/auth/logout', logout);
-
-// router.get('/footer', fetchFooter);
 
 // Protected Admin Routes
 router.use(verifyJWT, authorizeRoles(USER_ROLES.ADMIN));
@@ -111,8 +111,8 @@ router.get('/profile', (req, res) => {
         }
     });
 });
-//platform user and seller management 
 
+// Platform user and seller management
 router.get('/users', validate(listUsersQuerySchema), listAllUsers);
 router.get('/users/:userId', validate(userIdParamSchema), getUserDetails);
 router.patch('/users/:userId/status', validate(updateUserStatusSchema), updateUserStatus);
@@ -137,13 +137,16 @@ router.patch('/websites/:websiteId/review', validate(adminReviewWebsiteSchema), 
 // Footer Management Section (Admin Only Update)
 router.patch('/footer', validate(updateFooterSchema), modifyFooter);
 
-
+// Admin Package Management & Verification Section
 router.post('/packages', validate(createPackageSchema), createPackage);
-router.get('/packages', listAdminPackages);
-router.patch('/packages/:packageId', validate(updatePackageSchema), modifyPackage);
-router.delete('/packages/:packageId', validate(packageIdParamSchema), removePackage)
-router.patch( '/packages/:packageId/status', validate(togglePackageStatusSchema),  changePackageStatus);
+router.get('/packages', validate(listPackagesQuerySchema), listManagedPackages);
+router.get('/packages/:slug', validate(packageSlugParamSchema), getManagedPackage);
+router.patch('/packages/:slug', validate(updatePackageSchema), modifyPackage);
+router.patch('/packages/:slug/status', validate(togglePackageStatusSchema), changePackageStatus);
+router.patch('/packages/:slug/review', validate(reviewPackageSchema), reviewPackageVerification);
+router.delete('/packages/:slug', validate(packageSlugParamSchema), removePackage);
 
+// Press Releases Section
 router.get('/press-releases', getAllPressReleasesAdmin);
 router.get('/press-releases/:prId', validate(prIdParamSchema), getPressReleaseByIdAdmin);
 router.patch('/press-releases/:prId/status', validate(reviewPressReleaseStatusSchema), reviewPressReleaseStatus);

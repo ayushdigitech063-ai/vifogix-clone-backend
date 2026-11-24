@@ -9,6 +9,7 @@ const sellerRoutes = require('./seller.routes');
 const buyerWishlistRoutes = require('./buyerWishlist.routes');
 const buyerCartRoutes = require('./buyerCart.routes');
 const publicRoutes = require("./public.routes")
+const packageRoutes = require("./packageManager.routes");
 router.get('/health', (req, res) => {
     res.status(200).json({
         success: true,
@@ -23,5 +24,7 @@ router.use('/portfolio', portfolioRoutes);
 router.use('/seller', sellerRoutes);
 router.use('/wishlist', buyerWishlistRoutes);
 router.use('/cart', buyerCartRoutes);
-router.use('/public' , publicRoutes)
+router.use('/public' , publicRoutes);
+router.use('/package',packageRoutes);
+
 module.exports = router;
