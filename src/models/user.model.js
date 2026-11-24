@@ -57,4 +57,13 @@
         { timestamps: true }
     );
 
+  userSchema.index(
+    { role: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            role: { $in: [USER_ROLES.ADMIN, USER_ROLES.PACKAGE_MANAGER] }
+        }
+    }
+);
     module.exports = mongoose.model('User', userSchema);

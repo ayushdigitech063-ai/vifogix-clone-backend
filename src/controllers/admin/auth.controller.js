@@ -3,6 +3,9 @@ const {
     loginAdmin,
     refreshAdminToken,
     logoutAdmin,
+    loginPackageManager,
+    refreshPackageManagerToken,
+    logoutPackageManager,
     getAllPlatformUsers,
     getSingleUserDetails,
     changeUserAccountStatus,
@@ -10,7 +13,9 @@ const {
 } = require('../../services/auth.service');
 const { cookieOptions } = require('../../config/cookie.config');
 
-
+// ==========================================
+// 1. ADMIN AUTH HANDLERS
+// ==========================================
 const login = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
@@ -29,7 +34,6 @@ const login = asyncHandler(async (req, res) => {
     });
 });
 
-
 const refreshAccessToken = asyncHandler(async (req, res) => {
     const incomingRefreshToken = req.cookies?.refreshToken;
 
@@ -46,7 +50,6 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
         }
     });
 });
-
 
 const logout = asyncHandler(async (req, res) => {
     const incomingRefreshToken = req.cookies?.refreshToken;
@@ -65,7 +68,63 @@ const logout = asyncHandler(async (req, res) => {
     });
 });
 
+// ==========================================
+// 2. PACKAGE MANAGER AUTH HANDLERS
+// ==========================================
+const packageManagerLogin = asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
 
+    const { packageManager, accessToken, refreshToken } = await loginPackageManager(email, password);
+
+    res.cookie('pmRefreshToken', refreshToken, cookieOptions);
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Package Manager login successful',
+        data: {
+            packageManager,
+            accessToken
+        }
+    });
+});
+
+const refreshPackageManagerAccessToken = asyncHandler(async (req, res) => {
+    const incomingRefreshToken = req.cookies?.pmRefreshToken;
+
+    const tokens = await refreshPackageManagerToken(incomingRefreshToken);
+
+    res.cookie('pmRefreshToken', tokens.refreshToken, cookieOptions);
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Access token refreshed successfully',
+        data: {
+            accessToken: tokens.accessToken
+        }
+    });
+});
+
+const packageManagerLogout = asyncHandler(async (req, res) => {
+    const incomingRefreshToken = req.cookies?.pmRefreshToken;
+
+    if (incomingRefreshToken) {
+        await logoutPackageManager(incomingRefreshToken);
+    }
+
+    res.clearCookie('pmRefreshToken', cookieOptions);
+
+    return res.status(200).json({
+        success: true,
+        statusCode: 200,
+        message: 'Package Manager logged out successfully',
+        data: {}
+    });
+});
+// ==========================================
+// 3. PLATFORM USER MANAGEMENT HANDLERS
+// ==========================================
 const listAllUsers = asyncHandler(async (req, res) => {
     const data = await getAllPlatformUsers(req.query);
 
@@ -76,7 +135,6 @@ const listAllUsers = asyncHandler(async (req, res) => {
         data
     });
 });
-
 
 const getUserDetails = asyncHandler(async (req, res) => {
     const data = await getSingleUserDetails(req.params.userId);
@@ -89,7 +147,6 @@ const getUserDetails = asyncHandler(async (req, res) => {
     });
 });
 
-
 const updateUserStatus = asyncHandler(async (req, res) => {
     const user = await changeUserAccountStatus(req.params.userId, req.body.status);
 
@@ -100,7 +157,6 @@ const updateUserStatus = asyncHandler(async (req, res) => {
         data: { user }
     });
 });
-
 
 const removeUser = asyncHandler(async (req, res) => {
     const result = await deletePlatformUser(req.params.userId);
@@ -117,6 +173,9 @@ module.exports = {
     login,
     refreshAccessToken,
     logout,
+    packageManagerLogin,
+    refreshPackageManagerAccessToken,
+    packageManagerLogout,
     listAllUsers,
     getUserDetails,
     updateUserStatus,

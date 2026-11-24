@@ -7,7 +7,9 @@ const ApiError = require('../utils/ApiError');
 const { USER_ROLES } = require('../constants/roles.constant');
 const { generateAccessToken, generateRefreshToken } = require('./token.service');
 
-
+// ==========================================
+// 1. ADMIN AUTH SERVICES
+// ==========================================
 const loginAdmin = async (email, password) => {
     const admin = await User.findOne({ email: email.toLowerCase().trim() });
     if (!admin) {
@@ -92,7 +94,104 @@ const logoutAdmin = async (incomingRefreshToken) => {
     );
 };
 
+// ==========================================
+// 2. PACKAGE MANAGER AUTH SERVICES
+// ==========================================
+const loginPackageManager = async (email, password) => {
+    const manager = await User.findOne({
+        email: email.toLowerCase().trim(),
+        isDeleted: { $ne: true }
+    });
 
+    if (!manager) {
+        throw ApiError(401, 'Invalid credentials');
+    }
+
+    if (manager.role !== USER_ROLES.PACKAGE_MANAGER) {
+        throw ApiError(403, 'Access denied. Only Package Managers can login here.');
+    }
+
+    if (manager.status !== 'ACTIVE') {
+        throw ApiError(403, `Package Manager account is ${manager.status.toLowerCase()}. Access denied.`);
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, manager.password);
+    if (!isPasswordValid) {
+        throw ApiError(401, 'Invalid credentials');
+    }
+
+    const accessToken = generateAccessToken(manager);
+    const refreshToken = generateRefreshToken(manager);
+
+    manager.refreshToken = refreshToken;
+    await manager.save({ validateBeforeSave: false });
+
+    return {
+        packageManager: {
+            _id: manager._id,
+            name: manager.name,
+            email: manager.email,
+            role: manager.role
+        },
+        accessToken,
+        refreshToken
+    };
+};
+
+const refreshPackageManagerToken = async (incomingRefreshToken) => {
+    if (!incomingRefreshToken) {
+        throw ApiError(401, 'Unauthorized request. Refresh token missing.');
+    }
+
+    let decoded;
+    try {
+        decoded = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
+    } catch (err) {
+        throw ApiError(401, 'Refresh token expired or invalid');
+    }
+
+    const manager = await User.findById(decoded._id);
+    if (!manager || manager.isDeleted) {
+        throw ApiError(401, 'User does not exist');
+    }
+
+    if (manager.role !== USER_ROLES.PACKAGE_MANAGER) {
+        throw ApiError(403, 'Access denied. Only Package Managers allowed.');
+    }
+
+    if (manager.status !== 'ACTIVE') {
+        throw ApiError(403, `Account is ${manager.status.toLowerCase()}. Access denied.`);
+    }
+
+    if (manager.refreshToken !== incomingRefreshToken) {
+        throw ApiError(401, 'Refresh token is expired or already used');
+    }
+
+    const newAccessToken = generateAccessToken(manager);
+    const newRefreshToken = generateRefreshToken(manager);
+
+    manager.refreshToken = newRefreshToken;
+    await manager.save({ validateBeforeSave: false });
+
+    return {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken
+    };
+};
+
+const logoutPackageManager = async (incomingRefreshToken) => {
+    if (!incomingRefreshToken) return;
+
+    await User.findOneAndUpdate(
+        { refreshToken: incomingRefreshToken, role: USER_ROLES.PACKAGE_MANAGER },
+        { $set: { refreshToken: null } },
+        { new: true }
+    );
+};
+
+// ==========================================
+// 3. PLATFORM USER MANAGEMENT (BUYER & SELLER)
+// ==========================================
 const formatUserForAdmin = (user) => {
     const baseData = {
         _id: user._id,
@@ -113,7 +212,6 @@ const formatUserForAdmin = (user) => {
 
     return baseData;
 };
-
 
 const getAllPlatformUsers = async ({ page = 1, limit = 10, role, status, search }) => {
     const baseFilter = {
@@ -176,13 +274,12 @@ const getAllPlatformUsers = async ({ page = 1, limit = 10, role, status, search 
     };
 };
 
-
 const getSingleUserDetails = async (userId) => {
     const user = await User.findOne({ _id: userId, isDeleted: { $ne: true } })
         .select('-password -refreshToken -__v')
         .lean();
 
-    if (!user || user.role === USER_ROLES.ADMIN) {
+    if (!user || [USER_ROLES.ADMIN, USER_ROLES.PACKAGE_MANAGER].includes(user.role)) {
         throw ApiError(404, 'User not found');
     }
 
@@ -220,12 +317,11 @@ const getSingleUserDetails = async (userId) => {
     };
 };
 
-
 const changeUserAccountStatus = async (userId, status) => {
     const user = await User.findOne({ _id: userId, isDeleted: { $ne: true } });
 
-    if (!user || user.role === USER_ROLES.ADMIN) {
-        throw ApiError(404, 'User not found or cannot modify admin account');
+    if (!user || [USER_ROLES.ADMIN, USER_ROLES.PACKAGE_MANAGER].includes(user.role)) {
+        throw ApiError(404, 'User not found or cannot modify staff account');
     }
 
     if (user.status === status) {
@@ -243,12 +339,11 @@ const changeUserAccountStatus = async (userId, status) => {
     return formatUserForAdmin(user.toObject());
 };
 
-// 4. Soft Delete User Account
 const deletePlatformUser = async (userId) => {
     const user = await User.findOne({ _id: userId, isDeleted: { $ne: true } });
 
-    if (!user || user.role === USER_ROLES.ADMIN) {
-        throw ApiError(404, 'User not found or cannot delete admin account');
+    if (!user || [USER_ROLES.ADMIN, USER_ROLES.PACKAGE_MANAGER].includes(user.role)) {
+        throw ApiError(404, 'User not found or cannot delete staff account');
     }
 
     user.isDeleted = true;
@@ -265,11 +360,13 @@ const deletePlatformUser = async (userId) => {
     };
 };
 
-
 module.exports = {
     loginAdmin,
     refreshAdminToken,
     logoutAdmin,
+    loginPackageManager,
+    refreshPackageManagerToken,
+    logoutPackageManager,
     getAllPlatformUsers,
     getSingleUserDetails,
     changeUserAccountStatus,
