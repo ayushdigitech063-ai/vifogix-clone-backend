@@ -6,10 +6,26 @@ const { errorHandler } = require('./src/middlewares/error.middleware');
 
 const app = express();
 
-// Middlewares
+// Trust Render's reverse proxy (needed for rate-limiting & secure cookies)
+app.set('trust proxy', 1);
+
+// Allowed frontend origins
+const allowedOrigins = [
+    'https://vifogix-clone.vercel.app',
+    'http://localhost:5173'
+];
+
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-    credentials: true
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ''))) {
+            return callback(null, true);
+        }
+
+        return callback(new Error(`CORS blocked: ${origin}`));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(express.json({ limit: '16kb' }));

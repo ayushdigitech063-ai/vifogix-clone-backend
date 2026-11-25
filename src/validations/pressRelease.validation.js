@@ -2,7 +2,16 @@ const { z } = require('zod');
 const { VALID_CATEGORY_NAMES } = require('../constants/category.constant');
 
 const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,11}$/;
+
+const identifierSchema = z
+    .string({ error: 'Press release slug is required', required_error: 'Press release slug is required' })
+    .trim()
+    .refine(
+        (val) => objectIdRegex.test(val) || slugRegex.test(val.toLowerCase()),
+        'Invalid Press Release slug format'
+    );
 
 // 1. Seller: Create Press Release Validation
 const createPressReleaseSchema = z.object({
@@ -79,10 +88,10 @@ const createPressReleaseSchema = z.object({
         )
 });
 
-// 2. Seller: Update Press Release Validation
+// 2. Seller: Update Press Release Validation (by slug)
 const updatePressReleaseSchema = z.object({
     params: z.object({
-        prId: z.string().regex(objectIdRegex, 'Invalid Press Release ID format')
+        slug: identifierSchema
     }),
     body: z
         .object({
@@ -125,10 +134,10 @@ const updatePressReleaseSchema = z.object({
         })
 });
 
-// 3. Admin: Approve / Reject / Suspend Press Release Validation
+// 3. Admin: Approve / Reject / Suspend Press Release Validation (by slug)
 const reviewPressReleaseStatusSchema = z.object({
     params: z.object({
-        prId: z.string().regex(objectIdRegex, 'Invalid Press Release ID format')
+        slug: identifierSchema
     }),
     body: z
         .object({
@@ -148,10 +157,10 @@ const reviewPressReleaseStatusSchema = z.object({
         )
 });
 
-// 4. Press Release ID Param Validation
-const prIdParamSchema = z.object({
+// 4. Press Release Slug Param Validation
+const prSlugParamSchema = z.object({
     params: z.object({
-        prId: z.string().regex(objectIdRegex, 'Invalid Press Release ID format')
+        slug: identifierSchema
     })
 });
 
@@ -159,5 +168,5 @@ module.exports = {
     createPressReleaseSchema,
     updatePressReleaseSchema,
     reviewPressReleaseStatusSchema,
-    prIdParamSchema
+    prSlugParamSchema
 };

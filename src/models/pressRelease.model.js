@@ -1,6 +1,16 @@
 const mongoose = require('mongoose');
 const { VALID_CATEGORY_NAMES } = require('../constants/category.constant');
 
+const buildBaseSlug = (text) =>
+    text
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+
 const pressReleaseSchema = new mongoose.Schema(
     {
         sellerId: {
@@ -10,12 +20,18 @@ const pressReleaseSchema = new mongoose.Schema(
             index: true
         },
 
-        // --- 1. Basic PR Identity & Media ---
+        
         title: {
             type: String,
             required: [true, 'Press release title or outlet name is required'],
             trim: true,
             maxlength: [150, 'Title cannot exceed 150 characters']
+        },
+        slug: {
+            type: String,
+            unique: true,
+            lowercase: true,
+            trim: true
         },
         packageDescription: {
             type: String,
@@ -194,7 +210,23 @@ const pressReleaseSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
-// Partial Unique Index: Ek seller active (non-deleted) list me same outletDomain 2 baar add na kar sake
+// Auto-generate unique SEO-friendly slug from title
+pressReleaseSchema.pre('save', async function () {
+    if (!this.isModified('title') && this.slug) return;
+
+    const baseSlug = buildBaseSlug(this.title) || `press-release-${Date.now()}`;
+    let candidateSlug = baseSlug;
+    let counter = 2;
+
+    const Model = this.constructor;
+    while (await Model.exists({ slug: candidateSlug, _id: { $ne: this._id } })) {
+        candidateSlug = `${baseSlug}-${counter}`;
+        counter += 1;
+    }
+
+    this.slug = candidateSlug;
+});
+
 pressReleaseSchema.index(
     { sellerId: 1, outletDomain: 1 },
     {
@@ -206,9 +238,7 @@ pressReleaseSchema.index(
     }
 );
 
-
 pressReleaseSchema.index({ status: 1, isDeleted: 1, category: 1, price: 1 });
-
 
 pressReleaseSchema.virtual('totalPriceWithWriting').get(function () {
     if (!this.isPrWritingAvailable) return this.price;
