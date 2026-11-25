@@ -5,7 +5,13 @@ const ApiError = require('../utils/ApiError');
 const { USER_ROLES } = require('../constants/roles.constant');
 const { generateAccessToken, generateRefreshToken } = require('./token.service');
 
+const ALLOWED_PUBLIC_ROLES = [USER_ROLES.BUYER, USER_ROLES.SELLER];
+
 const registerUser = async ({ name, email, password, role, socialProfiles }) => {
+    if (!ALLOWED_PUBLIC_ROLES.includes(role)) {
+        throw ApiError(403, 'Invalid role for public registration.');
+    }
+
     const normalizedEmail = email.toLowerCase().trim();
 
     const existingUser = await User.findOne({ email: normalizedEmail });
@@ -71,8 +77,8 @@ const loginUser = async (email, password) => {
         throw ApiError(401, 'Invalid email or password.');
     }
 
-    if (user.role === USER_ROLES.ADMIN) {
-        throw ApiError(403, 'Admins must login through the admin portal.');
+    if (!ALLOWED_PUBLIC_ROLES.includes(user.role)) {
+        throw ApiError(403, 'Staff accounts must login through their dedicated portal.');
     }
 
     if (user.status === 'SUSPENDED' || user.status === 'REJECTED') {
@@ -130,8 +136,8 @@ const refreshUserToken = async (incomingRefreshToken, expectedRole) => {
         throw ApiError(401, 'User account does not exist');
     }
 
-    if (user.role === USER_ROLES.ADMIN) {
-        throw ApiError(403, 'Admins cannot refresh via user portal.');
+    if (!ALLOWED_PUBLIC_ROLES.includes(user.role)) {
+        throw ApiError(403, 'Staff accounts cannot refresh via user portal.');
     }
 
     if (expectedRole && user.role !== expectedRole) {
