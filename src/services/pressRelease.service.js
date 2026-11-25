@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const PressRelease = require('../models/pressRelease.model');
 const ApiError = require('../utils/ApiError');
 
@@ -5,6 +6,15 @@ const ApiError = require('../utils/ApiError');
 const cleanStringArray = (arr) => {
     if (!Array.isArray(arr)) return [];
     return [...new Set(arr.map((item) => item.trim()).filter(Boolean))];
+};
+
+// Helper: Resolve slug or 24-char ObjectId cleanly
+const buildIdentifierFilter = (identifier) => {
+    const trimmed = String(identifier).trim();
+    if (mongoose.Types.ObjectId.isValid(trimmed)) {
+        return { _id: trimmed };
+    }
+    return { slug: trimmed.toLowerCase() };
 };
 
 // ==========================================
@@ -62,7 +72,7 @@ const getSellerPressReleasesList = async (sellerId, query = {}) => {
     if (query.subCategory) filter.subCategories = query.subCategory;
     if (query.search) {
         const regex = new RegExp(query.search.trim(), 'i');
-        filter.$or = [{ title: regex }, { outletDomain: regex }];
+        filter.$or = [{ title: regex }, { outletDomain: regex }, { slug: regex }];
     }
 
     const [pressReleases, total] = await Promise.all([
@@ -85,10 +95,10 @@ const getSellerPressReleasesList = async (sellerId, query = {}) => {
     };
 };
 
-// 3. Seller: Get Single Press Release by ID
-const getSellerPressReleaseDetailsById = async (sellerId, prId) => {
+// 3. Seller: Get Single Press Release by Slug
+const getSellerPressReleaseDetails = async (sellerId, slugOrId) => {
     const pr = await PressRelease.findOne({
-        _id: prId,
+        ...buildIdentifierFilter(slugOrId),
         sellerId,
         isDeleted: false
     }).select('-__v');
@@ -100,10 +110,10 @@ const getSellerPressReleaseDetailsById = async (sellerId, prId) => {
     return pr;
 };
 
-// 4. Seller: Update Press Release by ID
-const updateSellerPressReleaseById = async (sellerId, prId, updateData) => {
+// 4. Seller: Update Press Release by Slug
+const updateSellerPressRelease = async (sellerId, slugOrId, updateData) => {
     const pr = await PressRelease.findOne({
-        _id: prId,
+        ...buildIdentifierFilter(slugOrId),
         sellerId,
         isDeleted: false
     });
@@ -118,7 +128,7 @@ const updateSellerPressReleaseById = async (sellerId, prId, updateData) => {
             sellerId,
             outletDomain: normalizedDomain,
             isDeleted: false,
-            _id: { $ne: prId }
+            _id: { $ne: pr._id }
         }).lean();
 
         if (duplicate) {
@@ -161,10 +171,10 @@ const updateSellerPressReleaseById = async (sellerId, prId, updateData) => {
     return pr;
 };
 
-// 5. Seller: Soft Delete Press Release by ID
-const deleteSellerPressReleaseById = async (sellerId, prId) => {
+// 5. Seller: Soft Delete Press Release by Slug
+const deleteSellerPressRelease = async (sellerId, slugOrId) => {
     const deleted = await PressRelease.findOneAndUpdate(
-        { _id: prId, sellerId, isDeleted: false },
+        { ...buildIdentifierFilter(slugOrId), sellerId, isDeleted: false },
         {
             $set: {
                 isDeleted: true,
@@ -181,7 +191,8 @@ const deleteSellerPressReleaseById = async (sellerId, prId) => {
     }
 
     return {
-        deletedPressReleaseId: prId,
+        deletedPressReleaseId: deleted._id,
+        slug: deleted.slug,
         title: deleted.title,
         deletedAt: deleted.deletedAt
     };
@@ -191,13 +202,12 @@ const deleteSellerPressReleaseById = async (sellerId, prId) => {
 // ZONE 2: ADMIN SERVICES
 // ==========================================
 
-// 6. Admin: Get All Sellers' Press Releases (With Seller Info, Filters & Pagination)
+// 6. Admin: Get All Sellers' Press Releases
 const getAdminPressReleasesList = async (query = {}) => {
     const page = Math.max(1, parseInt(query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(query.limit, 10) || 10));
     const skip = (page - 1) * limit;
 
-    // By default soft-deleted hide rahenge, jab tak ?includeDeleted=true na bheja jaye
     const filter = {};
     if (query.includeDeleted !== 'true') {
         filter.isDeleted = false;
@@ -208,7 +218,7 @@ const getAdminPressReleasesList = async (query = {}) => {
     if (query.sellerId) filter.sellerId = query.sellerId;
     if (query.search) {
         const regex = new RegExp(query.search.trim(), 'i');
-        filter.$or = [{ title: regex }, { outletDomain: regex }];
+        filter.$or = [{ title: regex }, { outletDomain: regex }, { slug: regex }];
     }
 
     const [pressReleases, total] = await Promise.all([
@@ -232,9 +242,9 @@ const getAdminPressReleasesList = async (query = {}) => {
     };
 };
 
-// 7. Admin: Get Single Press Release Details by ID (For Review Modal/Page)
-const getAdminPressReleaseDetailsById = async (prId) => {
-    const pr = await PressRelease.findById(prId)
+// 7. Admin: Get Single Press Release Details by Slug
+const getAdminPressReleaseDetails = async (slugOrId) => {
+    const pr = await PressRelease.findOne(buildIdentifierFilter(slugOrId))
         .populate('sellerId', 'name email phone companyName')
         .select('-__v');
 
@@ -245,9 +255,13 @@ const getAdminPressReleaseDetailsById = async (prId) => {
     return pr;
 };
 
-// 8. Admin: Verify / Approve / Reject / Suspend Press Release
-const updatePressReleaseStatusByAdmin = async (prId, { status, adminReviewNotes }) => {
-    const pr = await PressRelease.findOne({ _id: prId, isDeleted: false });
+// 8. Admin: Verify / Approve / Reject / Suspend Press Release by Slug
+const updatePressReleaseStatusByAdmin = async (slugOrId, { status, adminReviewNotes }) => {
+    const pr = await PressRelease.findOne({
+        ...buildIdentifierFilter(slugOrId),
+        isDeleted: false
+    });
+
     if (!pr) {
         throw ApiError(404, 'Press release package not found or has been deleted by seller');
     }
@@ -259,7 +273,6 @@ const updatePressReleaseStatusByAdmin = async (prId, { status, adminReviewNotes 
         pr.verifiedAt = new Date();
         pr.adminReviewNotes = adminReviewNotes || null;
     } else {
-        // REJECTED ya SUSPENDED
         pr.isVerified = false;
         pr.verifiedAt = null;
         pr.adminReviewNotes = adminReviewNotes;
@@ -294,14 +307,12 @@ const getPublicPressReleasesList = async (query = {}) => {
         filter.isPrWritingAvailable = true;
     }
 
-    // Price Range Filter
     if (query.minPrice || query.maxPrice) {
         filter.price = {};
         if (query.minPrice) filter.price.$gte = Number(query.minPrice);
         if (query.maxPrice) filter.price.$lte = Number(query.maxPrice);
     }
 
-    // DA / DR Filters
     if (query.minDA) filter.mozDA = { $gte: Number(query.minDA) };
     if (query.minDR) filter.ahrefsDR = { $gte: Number(query.minDR) };
 
@@ -310,7 +321,6 @@ const getPublicPressReleasesList = async (query = {}) => {
         filter.$or = [{ title: regex }, { outletDomain: regex }, { packageDescription: regex }];
     }
 
-    // Sorting Options
     let sortOption = { createdAt: -1 };
     if (query.sortBy === 'price_asc') sortOption = { price: 1 };
     else if (query.sortBy === 'price_desc') sortOption = { price: -1 };
@@ -337,10 +347,10 @@ const getPublicPressReleasesList = async (query = {}) => {
     };
 };
 
-// 10. Public: Get Single Active Press Release Detail Page by ID
-const getPublicPressReleaseDetailsById = async (prId) => {
+// 10. Public: Get Single Active Press Release Detail Page by Slug
+const getPublicPressReleaseDetails = async (slugOrId) => {
     const pr = await PressRelease.findOne({
-        _id: prId,
+        ...buildIdentifierFilter(slugOrId),
         status: 'ACTIVE',
         isVerified: true,
         isDeleted: false
@@ -354,17 +364,14 @@ const getPublicPressReleaseDetailsById = async (prId) => {
 };
 
 module.exports = {
-    // Seller
     createSellerPressRelease,
     getSellerPressReleasesList,
-    getSellerPressReleaseDetailsById,
-    updateSellerPressReleaseById,
-    deleteSellerPressReleaseById,
-    // Admin
+    getSellerPressReleaseDetails,
+    updateSellerPressRelease,
+    deleteSellerPressRelease,
     getAdminPressReleasesList,
-    getAdminPressReleaseDetailsById,
+    getAdminPressReleaseDetails,
     updatePressReleaseStatusByAdmin,
-    // Public
     getPublicPressReleasesList,
-    getPublicPressReleaseDetailsById
+    getPublicPressReleaseDetails
 };

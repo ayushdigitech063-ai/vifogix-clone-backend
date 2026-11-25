@@ -6,7 +6,6 @@ const {
     createSingleListing,
     uploadBulkCsvListings,
     getMyListings,
-    // getMarketplaceListings,
     getMainCategories,
     getSubCategoriesByCategory,
     updateMyListing,
@@ -16,7 +15,7 @@ const {
 const {
     addPressRelease,
     getMyPressReleases,
-    getMyPressReleaseById,
+    getSingleMyPressRelease,
     updateMyPressRelease,
     deleteMyPressRelease
 } = require('../controllers/seller/pressRelease.controller');
@@ -24,7 +23,7 @@ const {
 const {
     createPressReleaseSchema,
     updatePressReleaseSchema,
-    prIdParamSchema
+    prSlugParamSchema
 } = require('../validations/pressRelease.validation');
 
 const { verifyJWT } = require('../middlewares/auth.middleware');
@@ -42,7 +41,6 @@ const {
     websiteSlugParamSchema
 } = require('../validations/website.validation');
 
-// router.get('/marketplace', validate(listWebsitesQuerySchema), getMarketplaceListings);
 router.get('/categories', getMainCategories);
 router.get('/subcategories', validate(getSubCategoriesQuerySchema), getSubCategoriesByCategory);
 
@@ -55,11 +53,11 @@ router.get('/websites', validate(listWebsitesQuerySchema), getMyListings);
 router.patch('/websites/:slug', validate(updateWebsiteSchema), updateMyListing);
 router.get('/websites/:slug', validate(websiteSlugParamSchema), getMyWebsiteDetails);
 
-// Press Release Management (Seller Only)
+// Press Release Management (Seller Only - Slug Based)
 router.post('/press-releases', validate(createPressReleaseSchema), addPressRelease);
 router.get('/press-releases', getMyPressReleases);
-router.get('/press-releases/:prId', validate(prIdParamSchema), getMyPressReleaseById);
-router.patch('/press-releases/:prId', validate(updatePressReleaseSchema), updateMyPressRelease);
-router.delete('/press-releases/:prId', validate(prIdParamSchema), deleteMyPressRelease);
+router.get('/press-releases/:slug', validate(prSlugParamSchema), getSingleMyPressRelease);
+router.patch('/press-releases/:slug', validate(updatePressReleaseSchema), updateMyPressRelease);
+router.delete('/press-releases/:slug', validate(prSlugParamSchema), deleteMyPressRelease);
 
 module.exports = router;

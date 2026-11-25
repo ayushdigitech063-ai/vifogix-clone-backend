@@ -2,17 +2,19 @@ const asyncHandler = require('../../utils/asyncHandler');
 const {
     createSellerPressRelease,
     getSellerPressReleasesList,
-    getSellerPressReleaseDetailsById,
-    updateSellerPressReleaseById,
-    deleteSellerPressReleaseById,
+    getSellerPressReleaseDetails,
+    updateSellerPressRelease,
+    deleteSellerPressRelease,
     getAdminPressReleasesList,
-    getAdminPressReleaseDetailsById,
+    getAdminPressReleaseDetails,
     updatePressReleaseStatusByAdmin,
     getPublicPressReleasesList,
-    getPublicPressReleaseDetailsById
+    getPublicPressReleaseDetails
 } = require('../../services/pressRelease.service');
 
-
+// ==========================================
+// SELLER CONTROLLERS
+// ==========================================
 const addPressRelease = asyncHandler(async (req, res) => {
     const pressRelease = await createSellerPressRelease(req.user._id, req.body);
 
@@ -23,7 +25,6 @@ const addPressRelease = asyncHandler(async (req, res) => {
         data: { pressRelease }
     });
 });
-
 
 const getMyPressReleases = asyncHandler(async (req, res) => {
     const result = await getSellerPressReleasesList(req.user._id, req.query);
@@ -36,9 +37,8 @@ const getMyPressReleases = asyncHandler(async (req, res) => {
     });
 });
 
-
-const getMyPressReleaseById = asyncHandler(async (req, res) => {
-    const pressRelease = await getSellerPressReleaseDetailsById(req.user._id, req.params.prId);
+const getSingleMyPressRelease = asyncHandler(async (req, res) => {
+    const pressRelease = await getSellerPressReleaseDetails(req.user._id, req.params.slug);
 
     return res.status(200).json({
         success: true,
@@ -48,11 +48,10 @@ const getMyPressReleaseById = asyncHandler(async (req, res) => {
     });
 });
 
-
 const updateMyPressRelease = asyncHandler(async (req, res) => {
-    const pressRelease = await updateSellerPressReleaseById(
+    const pressRelease = await updateSellerPressRelease(
         req.user._id,
-        req.params.prId,
+        req.params.slug,
         req.body
     );
 
@@ -64,9 +63,8 @@ const updateMyPressRelease = asyncHandler(async (req, res) => {
     });
 });
 
-
 const deleteMyPressRelease = asyncHandler(async (req, res) => {
-    const result = await deleteSellerPressReleaseById(req.user._id, req.params.prId);
+    const result = await deleteSellerPressRelease(req.user._id, req.params.slug);
 
     return res.status(200).json({
         success: true,
@@ -76,6 +74,9 @@ const deleteMyPressRelease = asyncHandler(async (req, res) => {
     });
 });
 
+// ==========================================
+// ADMIN CONTROLLERS
+// ==========================================
 const getAllPressReleasesAdmin = asyncHandler(async (req, res) => {
     const result = await getAdminPressReleasesList(req.query);
 
@@ -87,9 +88,8 @@ const getAllPressReleasesAdmin = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Admin: Get Single Press Release by ID (GET /api/v1/admin/press-releases/:prId)
-const getPressReleaseByIdAdmin = asyncHandler(async (req, res) => {
-    const pressRelease = await getAdminPressReleaseDetailsById(req.params.prId);
+const getSinglePressReleaseAdmin = asyncHandler(async (req, res) => {
+    const pressRelease = await getAdminPressReleaseDetails(req.params.slug);
 
     return res.status(200).json({
         success: true,
@@ -99,9 +99,8 @@ const getPressReleaseByIdAdmin = asyncHandler(async (req, res) => {
     });
 });
 
-// 3. Admin: Verify / Approve / Reject / Suspend Press Release (PATCH /api/v1/admin/press-releases/:prId/status)
 const reviewPressReleaseStatus = asyncHandler(async (req, res) => {
-    const pressRelease = await updatePressReleaseStatusByAdmin(req.params.prId, req.body);
+    const pressRelease = await updatePressReleaseStatusByAdmin(req.params.slug, req.body);
 
     return res.status(200).json({
         success: true,
@@ -111,6 +110,9 @@ const reviewPressReleaseStatus = asyncHandler(async (req, res) => {
     });
 });
 
+// ==========================================
+// PUBLIC CONTROLLERS
+// ==========================================
 const getPublicPressReleases = asyncHandler(async (req, res) => {
     const result = await getPublicPressReleasesList(req.query);
 
@@ -122,9 +124,8 @@ const getPublicPressReleases = asyncHandler(async (req, res) => {
     });
 });
 
-// 2. Public: Get Single Press Release Detail Page (GET /api/v1/public/press-releases/:prId)
-const getPublicPressReleaseById = asyncHandler(async (req, res) => {
-    const pressRelease = await getPublicPressReleaseDetailsById(req.params.prId);
+const getSinglePublicPressRelease = asyncHandler(async (req, res) => {
+    const pressRelease = await getPublicPressReleaseDetails(req.params.slug);
 
     return res.status(200).json({
         success: true,
@@ -137,12 +138,12 @@ const getPublicPressReleaseById = asyncHandler(async (req, res) => {
 module.exports = {
     addPressRelease,
     getMyPressReleases,
-    getMyPressReleaseById,
+    getSingleMyPressRelease,
     updateMyPressRelease,
     deleteMyPressRelease,
     getAllPressReleasesAdmin,
-    getPressReleaseByIdAdmin,
+    getSinglePressReleaseAdmin,
     reviewPressReleaseStatus,
     getPublicPressReleases,
-    getPublicPressReleaseById
+    getSinglePublicPressRelease
 };

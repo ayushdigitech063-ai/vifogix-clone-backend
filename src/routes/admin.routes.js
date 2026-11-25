@@ -34,7 +34,6 @@ const {
     updateWebsiteVerificationStatus
 } = require('../controllers/seller/website.controller');
 
-// Updated Package Controller Imports
 const {
     createPackage,
     listManagedPackages,
@@ -55,7 +54,6 @@ const {
     updateFooterSchema
 } = require('../validations/footer.validation');
 
-// Updated Package Validation Imports
 const {
     createPackageSchema,
     updatePackageSchema,
@@ -67,13 +65,13 @@ const {
 
 const {
     getAllPressReleasesAdmin,
-    getPressReleaseByIdAdmin,
+    getSinglePressReleaseAdmin,
     reviewPressReleaseStatus
 } = require('../controllers/seller/pressRelease.controller');
 
 const {
     reviewPressReleaseStatusSchema,
-    prIdParamSchema
+    prSlugParamSchema
 } = require('../validations/pressRelease.validation');
 
 // Middlewares
@@ -146,9 +144,9 @@ router.patch('/packages/:slug/status', validate(togglePackageStatusSchema), chan
 router.patch('/packages/:slug/review', validate(reviewPackageSchema), reviewPackageVerification);
 router.delete('/packages/:slug', validate(packageSlugParamSchema), removePackage);
 
-// Press Releases Section
+// Press Releases Section (Slug Based)
 router.get('/press-releases', getAllPressReleasesAdmin);
-router.get('/press-releases/:prId', validate(prIdParamSchema), getPressReleaseByIdAdmin);
-router.patch('/press-releases/:prId/status', validate(reviewPressReleaseStatusSchema), reviewPressReleaseStatus);
+router.get('/press-releases/:slug', validate(prSlugParamSchema), getSinglePressReleaseAdmin);
+router.patch('/press-releases/:slug/status', validate(reviewPressReleaseStatusSchema), reviewPressReleaseStatus);
 
-module.exports = router;
+module.exports = router;    
