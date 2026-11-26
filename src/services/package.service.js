@@ -445,8 +445,10 @@ const reviewPackageBySlug = async (identifier, { status, adminReviewNotes }) => 
     if (status === 'ACTIVE') {
         pkg.isVerified = true;
         pkg.verifiedAt = new Date();
+        pkg.isActive = true;
     } else if (status === 'REJECTED' || status === 'PENDING_VERIFICATION') {
         pkg.isVerified = false;
+        pkg.isActive = false;
     }
 
     await pkg.save();
