@@ -134,7 +134,11 @@ const loginUserSchema = z.object({
             .email({ message: 'Invalid email address format' }),
         password: z
             .string({ required_error: 'Password is required' })
-            .min(1, { message: 'Password is required' })
+            .min(1, { message: 'Password is required' }),
+        role: z.enum([USER_ROLES.BUYER, USER_ROLES.SELLER], {
+            required_error: 'Role is required',
+            invalid_type_error: 'Role must be either BUYER or SELLER'
+        })
     })
 });
 

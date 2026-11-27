@@ -15,6 +15,12 @@ const {
     getSinglePublicPressRelease
 } = require('../controllers/seller/pressRelease.controller');
 
+const {
+    getPublicPortfolioList,
+    getPublicPortfolioDetails
+} = require('../controllers/portfolio.controller')
+const { portfolioSlugParamSchema } = require('../validations/portfolio.validation');
+
 // Middlewares & Validations
 const validate = require('../middlewares/validate.middleware');
 const { prSlugParamSchema } = require('../validations/pressRelease.validation');
@@ -42,5 +48,10 @@ router.post('/packages/:slug/calculate-price', validate(calculatePackagePriceSch
 // 4. Public Press Releases (Slug Based)
 router.get('/press-releases', getPublicPressReleases);
 router.get('/press-releases/:slug', validate(prSlugParamSchema), getSinglePublicPressRelease);
+
+
+//portfolia 
+router.get('/portfolio', getPublicPortfolioList);
+router.get('/portfolio/:slug', validate(portfolioSlugParamSchema), getPublicPortfolioDetails);
 
 module.exports = router;

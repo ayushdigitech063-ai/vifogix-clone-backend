@@ -21,7 +21,7 @@ const { verifyJWT } = require('../middlewares/auth.middleware');
 
 // Public & Cookie-based Endpoints
 router.post('/register', validate(registerUserSchema), register);
-router.post('/login', loginLimiter, validate(loginUserSchema), login);
+router.post('/login',  validate(loginUserSchema), login);
 
 router.post('/seller/refresh-token', refreshSellerAccessToken);
 router.post('/buyer/refresh-token', refreshBuyerAccessToken);

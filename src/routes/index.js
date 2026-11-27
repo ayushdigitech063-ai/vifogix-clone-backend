@@ -4,7 +4,7 @@ const router = express.Router();
 const adminRoutes = require('./admin.routes');
 const authRoutes = require('./auth.routes');
 const contactRoutes = require('./contact.routes');
-const portfolioRoutes = require('./portfolio.routes');
+// const portfolioRoutes = require('./portfolio.routes');
 const sellerRoutes = require('./seller.routes');
 const buyerWishlistRoutes = require('./buyerWishlist.routes');
 const buyerCartRoutes = require('./buyerCart.routes');
@@ -20,7 +20,7 @@ router.get('/health', (req, res) => {
 router.use('/admin', adminRoutes);
 router.use('/auth', authRoutes);
 router.use('/contact', contactRoutes);
-router.use('/portfolio', portfolioRoutes);
+// router.use('/portfolio', portfolioRoutes);
 router.use('/seller', sellerRoutes);
 router.use('/wishlist', buyerWishlistRoutes);
 router.use('/cart', buyerCartRoutes);

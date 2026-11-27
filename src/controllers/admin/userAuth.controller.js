@@ -36,9 +36,9 @@ const register = asyncHandler(async (req, res) => {
 
 // 2. Login
 const login = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, role } = req.body;
 
-    const { user, accessToken, refreshToken } = await loginUser(email, password);
+    const { user, accessToken, refreshToken } = await loginUser(email, password, role);
 
     const cookieName = getCookieNameByRole(user.role);
     res.cookie(cookieName, refreshToken, cookieOptions);
