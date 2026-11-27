@@ -3,7 +3,6 @@ const ApiError = require('../utils/ApiError');
 const { USER_ROLES } = require('../constants/roles.constant');
 const { generateTitleSlug } = require('../utils/slugify');
 
-// Helper: Build MongoDB query supporting both slug and 24-char ObjectId
 const buildIdentifierQuery = (identifier) => {
     const clean = String(identifier).trim();
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(clean);
@@ -164,7 +163,7 @@ const getManagedPackageDetails = async (identifier) => {
     return pkg;
 };
 
-// 4. Public: Get Only Verified & Active Packages (Hides unitAddonPrice)
+
 const getPublicPackagesList = async () => {
     return Package.find({
         status: 'ACTIVE',
@@ -445,8 +444,10 @@ const reviewPackageBySlug = async (identifier, { status, adminReviewNotes }) => 
     if (status === 'ACTIVE') {
         pkg.isVerified = true;
         pkg.verifiedAt = new Date();
-    } else if (status === 'REJECTED' || status === 'PENDING_VERIFICATION') {
+        pkg.isActive = true;
+    } else if (status === 'REJECTED' || status === 'PENDING_VERIFICATION' || status === 'SUSPENDED') {
         pkg.isVerified = false;
+        pkg.isActive = false;
     }
 
     await pkg.save();

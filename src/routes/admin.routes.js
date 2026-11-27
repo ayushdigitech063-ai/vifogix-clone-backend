@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-
+const { upload } = require('../middlewares/multer.middleware');
 const {
     login,
     refreshAccessToken,
@@ -19,6 +19,8 @@ const {
 } = require('../controllers/contact.controller');
 
 const {
+    getAdminPortfolioList,
+    getAdminPortfolioDetails,
     createPortfolio,
     modifyPortfolio,
     removePortfolio
@@ -80,7 +82,7 @@ const { loginLimiter } = require('../middlewares/rateLimiter.middleware');
 const { verifyJWT } = require('../middlewares/auth.middleware');
 const { authorizeRoles } = require('../middlewares/rbac.middleware');
 const { USER_ROLES } = require('../constants/roles.constant');
-const { upload } = require('../middlewares/multer.middleware');
+
 
 // Validations
 const {
@@ -89,7 +91,11 @@ const {
     userIdParamSchema,
     updateUserStatusSchema
 } = require('../validations/auth.validation');
-const { portfolioIdParamSchema } = require('../validations/portfolio.validation');
+const {
+    createPortfolioSchema,
+    updatePortfolioSchema,
+    portfolioIdentifierParamSchema
+} = require('../validations/portfolio.validation');
 
 // Cookie-based & Public Auth Routes (verifyJWT ke upar)
 router.post('/auth/login', loginLimiter, validate(loginSchema), login);
@@ -123,9 +129,11 @@ router.patch('/contacts/:contactId', updateInquiry);
 router.delete('/contacts/:contactId', removeInquiry);
 
 // Portfolio Management
-router.post('/portfolio', upload.single('thumbnail'), createPortfolio);
-router.patch('/portfolio/:projectId', upload.single('thumbnail'), validate(portfolioIdParamSchema), modifyPortfolio);
-router.delete('/portfolio/:projectId', validate(portfolioIdParamSchema), removePortfolio);
+router.get('/portfolio', getAdminPortfolioList);
+router.get('/portfolio/:identifier', validate(portfolioIdentifierParamSchema), getAdminPortfolioDetails);
+router.post('/portfolio', upload.single('thumbnail'), validate(createPortfolioSchema), createPortfolio);
+router.patch('/portfolio/:identifier', upload.single('thumbnail'), validate(updatePortfolioSchema), modifyPortfolio);
+router.delete('/portfolio/:identifier', validate(portfolioIdentifierParamSchema), removePortfolio);
 
 // Admin Website Listing & Verification Section
 router.get('/websites', validate(adminListWebsitesQuerySchema), getAllWebsitesForAdmin);

@@ -67,7 +67,7 @@ const registerUser = async ({ name, email, password, role, socialProfiles }) => 
     };
 };
 
-const loginUser = async (email, password) => {
+const loginUser = async (email, password, expectedRole) => {
     const user = await User.findOne({
         email: email.toLowerCase().trim(),
         isDeleted: { $ne: true }
@@ -77,10 +77,17 @@ const loginUser = async (email, password) => {
         throw ApiError(401, 'Invalid email or password.');
     }
 
+    // 1. Block staff/admin accounts from using the public login endpoint
     if (!ALLOWED_PUBLIC_ROLES.includes(user.role)) {
         throw ApiError(403, 'Staff accounts must login through their dedicated portal.');
     }
 
+    // 2. Ensure the database role matches the role selected on the frontend
+    if (user.role !== expectedRole) {
+        throw ApiError(401, 'Invalid email or password.');
+    }
+
+    // 3. Check account approval/suspension status
     if (user.status === 'SUSPENDED' || user.status === 'REJECTED') {
         throw ApiError(403, `Your account has been ${user.status.toLowerCase()}. Please contact support.`);
     }
@@ -89,6 +96,7 @@ const loginUser = async (email, password) => {
         throw ApiError(403, 'Your account is pending admin approval.');
     }
 
+    // 4. Verify password
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
         throw ApiError(401, 'Invalid email or password.');

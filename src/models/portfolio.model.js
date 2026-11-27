@@ -7,6 +7,13 @@ const portfolioSchema = new mongoose.Schema(
             required: true,
             trim: true
         },
+        slug: {
+            type: String,
+            required: true,
+            unique: true,
+            lowercase: true,
+            trim: true
+        },
         domainUrl: {
             type: String,
             required: true,
@@ -26,15 +33,13 @@ const portfolioSchema = new mongoose.Schema(
             required: true,
             trim: true
         },
-       
         lighthouse: {
-            overall: { type: Number, default: 95 },
-            performance: { type: Number, default: 95 },
-            accessibility: { type: Number, default: 95 },
-            bestPractices: { type: Number, default: 95 },
-            seo: { type: Number, default: 95 }
+            overall: { type: Number, default: 95, min: 0, max: 100 },
+            performance: { type: Number, default: 95, min: 0, max: 100 },
+            accessibility: { type: Number, default: 95, min: 0, max: 100 },
+            bestPractices: { type: Number, default: 95, min: 0, max: 100 },
+            seo: { type: Number, default: 95, min: 0, max: 100 }
         },
-        
         technologies: [
             { type: String, trim: true }
         ],
@@ -56,7 +61,19 @@ const portfolioSchema = new mongoose.Schema(
             index: true
         }
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { virtuals: true },
+        toObject: { virtuals: true }
+    }
 );
+
+portfolioSchema.virtual('displayDomain').get(function () {
+    if (!this.domainUrl) return '';
+    return this.domainUrl
+        .replace(/^https?:\/\//i, '')
+        .replace(/^www\./i, '')
+        .replace(/\/+$/, '');
+});
 
 module.exports = mongoose.model('Portfolio', portfolioSchema);

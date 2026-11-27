@@ -494,7 +494,7 @@ const getPublicWebsiteDetailsById = async (identifier) => {
 const updateSellerWebsiteById = async (sellerId, identifier, updateData) => {
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
     const query = isObjectId ? { _id: identifier } : { slug: identifier.toLowerCase() };
-
+// console.log("bff",identifier);
     const website = await Website.findOne({
         ...query,
         sellerId

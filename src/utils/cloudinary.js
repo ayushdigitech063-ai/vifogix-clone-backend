@@ -7,48 +7,58 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-const uploadOnCloudinary = async (localFilePath) => {
+const removeLocalFile = (localFilePath) => {
+    if (localFilePath && fs.existsSync(localFilePath)) {
+        fs.unlinkSync(localFilePath);
+    }
+};
+
+const uploadOnCloudinary = async (localFilePath, folder = 'marketplace_portfolio') => {
     try {
         if (!localFilePath) return null;
 
         const response = await cloudinary.uploader.upload(localFilePath, {
             resource_type: 'image',
-            folder: 'marketplace_portfolio'
+            folder,
+            transformation: [
+                { width: 1200, crop: 'limit' },
+                { quality: 'auto', fetch_format: 'auto' }
+            ]
         });
 
-        if (fs.existsSync(localFilePath)) {
-            fs.unlinkSync(localFilePath);
-        }
-
+        removeLocalFile(localFilePath);
         return response.secure_url;
     } catch (error) {
-        if (fs.existsSync(localFilePath)) {
-            fs.unlinkSync(localFilePath);
-        }
+        removeLocalFile(localFilePath);
+        console.error('Cloudinary upload error:', error.message);
         return null;
     }
 };
 
 const deleteFromCloudinary = async (fileUrl) => {
     try {
-        if (!fileUrl) return null;
+        if (!fileUrl || !fileUrl.includes('cloudinary.com')) return null;
 
-        const urlParts = fileUrl.split('/');
-        const folder = 'marketplace_portfolio';
-        const fileNameWithExt = urlParts[urlParts.length - 1];
-        const fileName = fileNameWithExt.split('.')[0];
+        // URL se '/upload/' ke baad ka version aur extension hata kar exact public_id nikalein
+        const urlParts = fileUrl.split('/upload/');
+        if (urlParts.length < 2) return null;
 
-        const publicId = `${folder}/${fileName}`;
+        const pathWithoutVersion = urlParts[1].replace(/^v\d+\//, '');
+        const publicId = pathWithoutVersion.replace(/\.[^/.]+$/, '');
 
-        const result = await cloudinary.uploader.destroy(publicId);
+        const result = await cloudinary.uploader.destroy(publicId, {
+            resource_type: 'image',
+            invalidate: true
+        });
         return result;
     } catch (error) {
-        console.error('Cloudinary delete error:', error);
+        console.error('Cloudinary delete error:', error.message);
         return null;
     }
 };
 
 module.exports = {
     uploadOnCloudinary,
-    deleteFromCloudinary
+    deleteFromCloudinary,
+    removeLocalFile
 };
