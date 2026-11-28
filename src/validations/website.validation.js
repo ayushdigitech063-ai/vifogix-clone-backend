@@ -334,7 +334,7 @@ const csvWebsiteRowSchema = z
     .superRefine(validateCategoryAndSubCategories);
 
 // ============================================================================
-// NEW: ADMIN & CATEGORY DROPDOWN VALIDATION SCHEMAS
+// ADMIN & CATEGORY DROPDOWN VALIDATION SCHEMAS
 // ============================================================================
 
 // 6. Admin List All Websites Query Schema
@@ -351,10 +351,16 @@ const adminListWebsitesQuerySchema = z.object({
     })
 });
 
-// 7. Admin Verify / Update Website Status & SEO Metrics Schema
+// 7. Admin Verify / Update Website Status & SEO Metrics Schema (Supports Slug & ObjectId)
 const adminReviewWebsiteSchema = z.object({
-    params: z.object({
-        websiteId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid Website ID format')
+   params: z.object({
+        slug: z
+            .string({ error: 'Website slug is required', required_error: 'Website slug is required' })
+            .trim()
+            .toLowerCase()
+            .min(3, 'Invalid website slug')
+            .max(150, 'Website slug is too long')
+            .regex(/^[a-z0-9.-]+$|^[0-9a-fA-F]{24}$/, 'Invalid website slug format')
     }),
     body: z
         .object({
@@ -405,7 +411,6 @@ const getSubCategoriesQuerySchema = z.object({
         })
     })
 });
-
 
 // 9. Seller: Update Website Schema
 const updateWebsiteSchema = z.object({
@@ -507,16 +512,17 @@ const updateWebsiteSchema = z.object({
 });
 
 const websiteSlugParamSchema = z.object({
-    params: z.object({
+   params: z.object({
         slug: z
             .string({ error: 'Website slug is required', required_error: 'Website slug is required' })
             .trim()
             .toLowerCase()
-            .min(3, 'Invalid website URL')
+            .min(3, 'Invalid website slug')
             .max(150, 'Website slug is too long')
-            .regex(/^[a-z0-9.-]+$/, 'Invalid website slug format')
+            .regex(/^[a-z0-9.-]+$|^[0-9a-fA-F]{24}$/, 'Invalid website slug format')
     })
-});
+}); 
+        
 module.exports = {
     addWebsiteSchema,
     checkDomainQuerySchema,
