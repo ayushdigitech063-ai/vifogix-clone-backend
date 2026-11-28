@@ -8,9 +8,13 @@ const { generateDomainSlug } = require('../utils/slugify');
 
 const MAX_CSV_ROWS = 500;
 
-
 const escapeRegex = (str = '') => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const buildWebsiteIdentifierQuery = (identifier) => {
+    const clean = String(identifier).trim();
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(clean);
+    return isObjectId ? { _id: clean } : { slug: clean.toLowerCase() };
+};
 
 const cleanCsvIssueMessage = (field, rawMessage = '') => {
     if (rawMessage.includes('received undefined') || rawMessage === 'Required') {
@@ -21,7 +25,6 @@ const cleanCsvIssueMessage = (field, rawMessage = '') => {
     }
     return rawMessage;
 };
-
 
 const getDomainRegistrationHistory = async (domain) => {
     const previousListings = await Website.find({ domain })
@@ -41,7 +44,6 @@ const getDomainRegistrationHistory = async (domain) => {
         }))
     };
 };
-
 
 const addSingleWebsite = async (sellerId, validatedData) => {
     const { domain } = validatedData;
@@ -100,7 +102,6 @@ const addSingleWebsite = async (sellerId, validatedData) => {
         }
     };
 };
-
 
 const processBulkCsvUpload = async (sellerId, filePath) => {
     return new Promise((resolve, reject) => {
@@ -283,7 +284,6 @@ const processBulkCsvUpload = async (sellerId, filePath) => {
     });
 };
 
-
 const getSellerWebsitesList = async (sellerId, { page = 1, limit = 10, status, category, subCategory, country, search }) => {
     const filter = { sellerId };
 
@@ -312,7 +312,6 @@ const getSellerWebsitesList = async (sellerId, { page = 1, limit = 10, status, c
         }
     };
 };
-
 
 const getPublicMarketplaceList = async ({ page = 1, limit = 10, category, subCategory, country, search }) => {
     const activeSellerIds = await User.find({
@@ -356,7 +355,6 @@ const getPublicMarketplaceList = async ({ page = 1, limit = 10, category, subCat
         }
     };
 };
-
 
 const getAdminWebsitesList = async ({ page = 1, limit = 10, status, sellerId, category, subCategory, country, search }) => {
     const filter = {};
@@ -410,9 +408,8 @@ const getAdminWebsitesList = async ({ page = 1, limit = 10, status, sellerId, ca
     };
 };
 
-
-const getAdminWebsiteById = async (websiteId) => {
-    const website = await Website.findById(websiteId)
+const getAdminWebsiteById = async (identifier) => {
+    const website = await Website.findOne(buildWebsiteIdentifierQuery(identifier))
         .populate('sellerId', 'name email role socialProfiles status isDeleted createdAt')
         .lean();
 
@@ -423,9 +420,8 @@ const getAdminWebsiteById = async (websiteId) => {
     return website;
 };
 
-
-const reviewAndVerifyWebsite = async (websiteId, reviewData) => {
-    const website = await Website.findById(websiteId);
+const reviewAndVerifyWebsite = async (identifier, reviewData) => {
+    const website = await Website.findOne(buildWebsiteIdentifierQuery(identifier));
     if (!website) {
         throw ApiError(404, 'Website listing not found');
     }
@@ -440,7 +436,7 @@ const reviewAndVerifyWebsite = async (websiteId, reviewData) => {
     if (status === 'ACTIVE') {
         website.isVerified = true;
         website.verifiedAt = new Date();
-    } else if (status === 'REJECTED' || status === 'PENDING_VERIFICATION') {
+    } else if (status === 'REJECTED' || status === 'PENDING_VERIFICATION' || status === 'SUSPENDED') {
         website.isVerified = false;
     }
 
@@ -454,7 +450,6 @@ const reviewAndVerifyWebsite = async (websiteId, reviewData) => {
 
     return website;
 };
-
 
 const getPublicWebsiteDetailsById = async (identifier) => {
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
@@ -494,7 +489,7 @@ const getPublicWebsiteDetailsById = async (identifier) => {
 const updateSellerWebsiteById = async (sellerId, identifier, updateData) => {
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
     const query = isObjectId ? { _id: identifier } : { slug: identifier.toLowerCase() };
-// console.log("bff",identifier);
+
     const website = await Website.findOne({
         ...query,
         sellerId

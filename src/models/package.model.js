@@ -119,7 +119,6 @@ const packageSchema = new mongoose.Schema(
             type: String,
             required: [true, 'Package name is required'],
             trim: true
-            // uppercase: true
         },
         slug: {
             type: String,
@@ -133,6 +132,17 @@ const packageSchema = new mongoose.Schema(
             type: String,
             required: [true, 'Tagline is required'],
             trim: true
+        },
+
+        // Manual Package Overview & Key Bullet Points (Optional)
+        overview: {
+            type: String,
+            trim: true,
+            default: null
+        },
+        highlights: {
+            type: [String],
+            default: []
         },
 
         // Pricing & Billing
@@ -234,9 +244,8 @@ packageSchema.pre('save', function () {
         );
     }
     if (!this.isCustomPrice) {
-    this.customPriceLabel = null;
-}
-    
+        this.customPriceLabel = null;
+    }
 });
 
 // Compound indexes for fast public & creator dashboard queries

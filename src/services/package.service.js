@@ -1,131 +1,384 @@
-const Package = require('../models/package.model');
+const fs = require('fs');
+const csv = require('csv-parser');
+const Website = require('../models/website.model');
+const User = require('../models/user.model');
 const ApiError = require('../utils/ApiError');
-const { USER_ROLES } = require('../constants/roles.constant');
-const { generateTitleSlug } = require('../utils/slugify');
+const { csvWebsiteRowSchema } = require('../validations/website.validation');
+const { generateDomainSlug } = require('../utils/slugify');
 
-const buildIdentifierQuery = (identifier) => {
+const MAX_CSV_ROWS = 500;
+
+const escapeRegex = (str = '') => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildWebsiteIdentifierQuery = (identifier) => {
     const clean = String(identifier).trim();
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(clean);
     return isObjectId ? { _id: clean } : { slug: clean.toLowerCase() };
 };
 
-// Helper: Clean & validate SEO activities array
-const sanitizeActivities = (activities = []) => {
-    if (!Array.isArray(activities) || activities.length === 0) {
-        throw ApiError(400, 'At least one valid SEO activity is required.');
+const cleanCsvIssueMessage = (field, rawMessage = '') => {
+    if (rawMessage.includes('received undefined') || rawMessage === 'Required') {
+        return `${field} is required`;
     }
-
-    const seenNames = new Set();
-    const cleaned = [];
-
-    for (const item of activities) {
-        const cleanName = String(item.activityName || '').trim();
-        if (!cleanName) continue;
-
-        const lowerKey = cleanName.toLowerCase();
-        if (seenNames.has(lowerKey)) {
-            throw ApiError(
-                400,
-                `Duplicate SEO activity '${cleanName}' is not allowed in the same package.`
-            );
-        }
-        seenNames.add(lowerKey);
-
-        cleaned.push({
-            activityName: cleanName,
-            monthlyCount: Number(item.monthlyCount),
-            unitAddonPrice: Number(item.unitAddonPrice) || 0,
-            isAddonAllowed: item.isAddonAllowed !== undefined ? Boolean(item.isAddonAllowed) : true
-        });
+    if (rawMessage.startsWith('Invalid input: expected')) {
+        return `Invalid ${field} format`;
     }
-
-    if (cleaned.length === 0) {
-        throw ApiError(400, 'At least one valid SEO activity is required.');
-    }
-
-    return cleaned;
+    return rawMessage;
 };
 
-// 1. Create New Package (Package Manager -> PENDING_VERIFICATION, Admin -> ACTIVE)
-const createNewPackage = async (user, payload) => {
-    const normalizedName = payload.name.toUpperCase().trim();
-    const isAdmin = user.role === USER_ROLES.ADMIN;
+const getDomainRegistrationHistory = async (domain) => {
+    const previousListings = await Website.find({ domain })
+        .select('createdAt price isVerified status')
+        .sort({ createdAt: 1 })
+        .lean();
 
-    const duplicate = await Package.findOne({
-        name: normalizedName,
-        isDeleted: { $ne: true }
-    }).lean();
+    return {
+        domain,
+        isAlreadyListed: previousListings.length > 0,
+        alreadyRegisteredCount: previousListings.length,
+        history: previousListings.map((item, index) => ({
+            position: index + 1,
+            registeredAt: item.createdAt,
+            price: item.price,
+            isVerified: item.isVerified
+        }))
+    };
+};
 
-    if (duplicate) {
-        throw ApiError(409, `Package '${normalizedName}' already exists.`);
+const addSingleWebsite = async (sellerId, validatedData) => {
+    const { domain } = validatedData;
+
+    const alreadyAddedBySelf = await Website.findOne({ sellerId, domain }).lean();
+    if (alreadyAddedBySelf) {
+        throw ApiError(409, `You have already registered this domain '${domain}'.`, [
+            { field: 'domain', message: `You have already registered this domain '${domain}'.` }
+        ]);
     }
 
-    payload.activities = sanitizeActivities(payload.activities);
+    const totalPreviousSellers = await Website.countDocuments({ domain });
+    const slug = await generateDomainSlug(Website, domain);
 
-    if (payload.isCustomPrice) {
-        payload.price = null;
-        payload.billingCycle = null;
-    } else if (payload.price === null || payload.price === undefined) {
-        throw ApiError(400, 'Price is required when isCustomPrice is false.');
-    }
-
-    // Both Admin & Package Manager can set 'Most popular' (only 1 package stays highlighted)
-    if (payload.isPopular) {
-        await Package.updateMany(
-            { isPopular: true, isDeleted: { $ne: true } },
-            { $set: { isPopular: false, badgeText: null } }
-        );
-        if (!payload.badgeText) {
-            payload.badgeText = 'Most popular';
-        }
-    } else {
-        payload.isPopular = false;
-        payload.badgeText = payload.badgeText || null;
-    }
-
-    // Display order calculation & shifting across all non-deleted packages
-    const totalCount = await Package.countDocuments({ isDeleted: { $ne: true } });
-    if (payload.displayOrder === undefined || payload.displayOrder > totalCount + 1) {
-        payload.displayOrder = totalCount + 1;
-    } else {
-        await Package.updateMany(
-            { displayOrder: { $gte: payload.displayOrder }, isDeleted: { $ne: true } },
-            { $inc: { displayOrder: 1 } }
-        );
-    }
-
-    const slug = await generateTitleSlug(Package, normalizedName);
-
-    const newPackage = await Package.create({
-        ...payload,
-        name: normalizedName,
+    const newWebsite = await Website.create({
+        sellerId,
+        domain: validatedData.domain,
         slug,
-        createdBy: user._id,
-        creatorRole: user.role,
-        status: isAdmin ? 'ACTIVE' : 'PENDING_VERIFICATION',
-        isVerified: isAdmin ? true : false,
-        verifiedAt: isAdmin ? new Date() : null
+        country: validatedData.country,
+        otherCountriesCount: validatedData.otherCountriesCount ?? 0,
+        category: validatedData.category,
+        subCategories: validatedData.subCategories,
+        language: validatedData.language,
+
+        // Commercial Details
+        price: validatedData.price,
+        contentWritingPrice: validatedData.contentWritingPrice ?? 0,
+        turnaroundDays: validatedData.turnaroundDays,
+        maxLinksAllowed: validatedData.maxLinksAllowed ?? 2,
+        linkType: validatedData.linkType ?? 'DoFollow',
+        samplePostUrl: validatedData.samplePostUrl ?? null,
+
+        mozDA: validatedData.mozDA ?? null,
+        ahrefsDR: validatedData.ahrefsDR ?? null,
+        semrushAS: validatedData.semrushAS ?? null,
+        monthlyTraffic: validatedData.monthlyTraffic ?? null,
+        semrushTraffic: validatedData.semrushTraffic ?? null,
+        ahrefsTraffic: validatedData.ahrefsTraffic ?? null,
+        followedBacklinks: validatedData.followedBacklinks ?? null,
+        noFollowedBacklinks: validatedData.noFollowedBacklinks ?? null,
+        domainAge: validatedData.domainAge ?? null,
+        totalDeals: validatedData.totalDeals ?? 0,
+
+        isVerified: false,
+        status: 'PENDING_VERIFICATION'
     });
 
-    return newPackage;
+    return {
+        website: newWebsite,
+        domainStats: {
+            alreadyRegisteredCount: totalPreviousSellers,
+            message:
+                totalPreviousSellers > 0
+                    ? `${totalPreviousSellers} other seller(s) have listed this domain previously.`
+                    : 'Congratulations! You are the first seller to register this domain.'
+        }
+    };
 };
 
-// 2. Shared (Admin & Package Manager): Get All Packages (All non-deleted packages + summary counts)
-const getAllManagedPackagesList = async ({ status, creatorRole } = {}) => {
-    const filter = { isDeleted: { $ne: true } };
-    if (status) filter.status = status;
-    if (creatorRole) filter.creatorRole = creatorRole;
+const processBulkCsvUpload = async (sellerId, filePath) => {
+    return new Promise((resolve, reject) => {
+        const rows = [];
+        const parsingErrors = [];
+        let rowNumber = 1;
+        let rowLimitExceeded = false;
 
-    const [packages, statusBreakdown] = await Promise.all([
-        Package.find(filter)
-            .populate('createdBy', 'name email role status')
-            .sort({ displayOrder: 1, createdAt: -1 })
-            .select('-__v')
+        const stream = fs.createReadStream(filePath).pipe(csv());
+
+        stream
+            .on('data', (rawRow) => {
+                rowNumber++;
+
+                if (rowNumber - 1 > MAX_CSV_ROWS) {
+                    rowLimitExceeded = true;
+                    stream.destroy();
+                    return;
+                }
+
+                const mappedInput = {
+                    domain: rawRow.domain ?? rawRow.Domain,
+                    country: rawRow.country ?? rawRow.Country,
+                    otherCountriesCount: rawRow.otherCountriesCount ?? rawRow.OtherCountriesCount,
+                    category: rawRow.category ?? rawRow.Category,
+                    subCategories: rawRow.subCategories ?? rawRow.SubCategories,
+                    price: rawRow.price ?? rawRow.Price,
+                    contentWritingPrice: rawRow.contentWritingPrice ?? rawRow.ContentWritingPrice,
+                    turnaroundDays: rawRow.turnaroundDays ?? rawRow.TurnaroundDays,
+                    maxLinksAllowed: rawRow.maxLinksAllowed ?? rawRow.MaxLinksAllowed,
+                    linkType: rawRow.linkType ?? rawRow.LinkType,
+                    language: rawRow.language ?? rawRow.Language,
+                    mozDA: rawRow.mozDA ?? rawRow.MozDA,
+                    ahrefsDR: rawRow.ahrefsDR ?? rawRow.AhrefsDR,
+                    semrushAS: rawRow.semrushAS ?? rawRow.SemrushAS,
+                    monthlyTraffic: rawRow.monthlyTraffic ?? rawRow.MonthlyTraffic,
+                    semrushTraffic: rawRow.semrushTraffic ?? rawRow.SemrushTraffic,
+                    ahrefsTraffic: rawRow.ahrefsTraffic ?? rawRow.AhrefsTraffic,
+                    followedBacklinks: rawRow.followedBacklinks ?? rawRow.FollowedBacklinks,
+                    noFollowedBacklinks: rawRow.noFollowedBacklinks ?? rawRow.NoFollowedBacklinks,
+                    domainAge: rawRow.domainAge ?? rawRow.DomainAge,
+                    totalDeals: rawRow.totalDeals ?? rawRow.TotalDeals,
+                    samplePostUrl: rawRow.samplePostUrl ?? rawRow.SamplePostUrl
+                };
+
+                // Skip completely blank rows
+                const hasAnyValue = Object.values(mappedInput).some(
+                    (val) => val !== undefined && val !== null && String(val).trim() !== ''
+                );
+                if (!hasAnyValue) return;
+
+                const parsed = csvWebsiteRowSchema.safeParse(mappedInput);
+                if (!parsed.success) {
+                    const issues = parsed.error.issues || parsed.error.errors || [];
+                    const fieldErrors = {};
+                    for (const issue of issues) {
+                        const field = issue.path[0] || 'row';
+                        if (!fieldErrors[field]) {
+                            fieldErrors[field] = cleanCsvIssueMessage(field, issue.message);
+                        }
+                    }
+
+                    parsingErrors.push({
+                        row: rowNumber,
+                        domain: String(mappedInput.domain || 'N/A').trim(),
+                        errors: fieldErrors
+                    });
+                    return;
+                }
+
+                rows.push({
+                    _rowNumber: rowNumber,
+                    sellerId,
+                    ...parsed.data,
+                    isVerified: false,
+                    status: 'PENDING_VERIFICATION'
+                });
+            })
+            .on('close', () => {
+                if (rowLimitExceeded) {
+                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+                    return reject(
+                        ApiError(400, `Maximum ${MAX_CSV_ROWS} rows are allowed per CSV upload.`, [
+                            { field: 'file', message: `CSV exceeds maximum limit of ${MAX_CSV_ROWS} rows` }
+                        ])
+                    );
+                }
+            })
+            .on('end', async () => {
+                if (rowLimitExceeded) return;
+
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+
+                if (rows.length === 0) {
+                    return resolve({
+                        totalRowsInCsv: rowNumber - 1,
+                        successfullyInserted: 0,
+                        failedOrSkipped: parsingErrors.length,
+                        errors: parsingErrors
+                    });
+                }
+
+                try {
+                    const domainList = rows.map((r) => r.domain);
+
+                    const [alreadyOwned, existingSlugDocs] = await Promise.all([
+                        Website.find({
+                            sellerId,
+                            domain: { $in: domainList }
+                        })
+                            .select('domain')
+                            .lean(),
+                        Website.find({
+                            domain: { $in: domainList }
+                        })
+                            .select('slug')
+                            .lean()
+                    ]);
+
+                    const alreadyOwnedSet = new Set(alreadyOwned.map((w) => w.domain));
+                    const validRows = [];
+                    const seenInCurrentBatch = new Set();
+                    const reservedSlugs = new Set(existingSlugDocs.map((w) => w.slug));
+
+                    for (const row of rows) {
+                        const { _rowNumber, ...cleanRowData } = row;
+
+                        if (alreadyOwnedSet.has(cleanRowData.domain)) {
+                            parsingErrors.push({
+                                row: _rowNumber,
+                                domain: cleanRowData.domain,
+                                errors: { domain: 'You have already listed this domain previously' }
+                            });
+                        } else if (seenInCurrentBatch.has(cleanRowData.domain)) {
+                            parsingErrors.push({
+                                row: _rowNumber,
+                                domain: cleanRowData.domain,
+                                errors: { domain: 'Duplicate entry inside the same CSV' }
+                            });
+                        } else {
+                            seenInCurrentBatch.add(cleanRowData.domain);
+                            cleanRowData.slug = await generateDomainSlug(
+                                Website,
+                                cleanRowData.domain,
+                                reservedSlugs
+                            );
+                            validRows.push(cleanRowData);
+                        }
+                    }
+
+                    let insertedCount = 0;
+                    if (validRows.length > 0) {
+                        const result = await Website.insertMany(validRows, { ordered: false });
+                        insertedCount = result.length;
+                    }
+
+                    return resolve({
+                        totalRowsInCsv: rowNumber - 1,
+                        successfullyInserted: insertedCount,
+                        failedOrSkipped: parsingErrors.length,
+                        errors: parsingErrors
+                    });
+                } catch (dbErr) {
+                    return resolve({
+                        totalRowsInCsv: rowNumber - 1,
+                        successfullyInserted: dbErr.result?.nInserted || 0,
+                        failedOrSkipped: parsingErrors.length + (dbErr.writeErrors?.length || 0),
+                        errors: parsingErrors
+                    });
+                }
+            })
+            .on('error', (err) => {
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+                return reject(err);
+            });
+    });
+};
+
+const getSellerWebsitesList = async (sellerId, { page = 1, limit = 10, status, category, subCategory, country, search }) => {
+    const filter = { sellerId };
+
+    if (status) filter.status = status;
+    if (category && category !== 'All') filter.category = category;
+    if (subCategory && subCategory !== 'All') filter.subCategories = subCategory;
+    if (country) filter.country = country;
+    if (search) {
+        filter.domain = { $regex: escapeRegex(search), $options: 'i' };
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [websites, total] = await Promise.all([
+        Website.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        Website.countDocuments(filter)
+    ]);
+
+    return {
+        websites,
+        pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        }
+    };
+};
+
+const getPublicMarketplaceList = async ({ page = 1, limit = 10, category, subCategory, country, search }) => {
+    const activeSellerIds = await User.find({
+        role: 'SELLER',
+        status: 'ACTIVE',
+        isDeleted: { $ne: true }
+    }).distinct('_id');
+
+    const filter = {
+        sellerId: { $in: activeSellerIds },
+        status: 'ACTIVE',
+        isVerified: true
+    };
+
+    if (category && category !== 'All') filter.category = category;
+    if (subCategory && subCategory !== 'All') filter.subCategories = subCategory;
+    if (country) filter.country = country;
+    if (search) {
+        filter.domain = { $regex: escapeRegex(search), $options: 'i' };
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [websites, total] = await Promise.all([
+        Website.find(filter)
+            .select('-adminReviewNotes -__v')
+            .sort({ totalDeals: -1, ahrefsDR: -1, createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
             .lean(),
-        Package.aggregate([
-            { $match: { isDeleted: { $ne: true } } },
-            { $group: { _id: '$status', count: { $sum: 1 } } }
-        ])
+        Website.countDocuments(filter)
+    ]);
+
+    return {
+        websites,
+        pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        }
+    };
+};
+
+const getAdminWebsitesList = async ({ page = 1, limit = 10, status, sellerId, category, subCategory, country, search }) => {
+    const filter = {};
+
+    if (status) filter.status = status;
+    if (sellerId) filter.sellerId = sellerId;
+    if (category && category !== 'All') filter.category = category;
+    if (subCategory && subCategory !== 'All') filter.subCategories = subCategory;
+    if (country) filter.country = country;
+    if (search) {
+        filter.domain = { $regex: escapeRegex(search), $options: 'i' };
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [websites, total, statusBreakdown] = await Promise.all([
+        Website.find(filter)
+            .populate('sellerId', 'name email role socialProfiles status isDeleted')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+        Website.countDocuments(filter),
+        Website.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }])
     ]);
 
     const summaryCounts = {
@@ -143,326 +396,157 @@ const getAllManagedPackagesList = async ({ status, creatorRole } = {}) => {
         }
     }
 
-    return { summaryCounts, packages };
-};
-
-// 3. Shared (Admin & Package Manager): Get Single Package Details by Slug (Includes unitAddonPrice)
-const getManagedPackageDetails = async (identifier) => {
-    const pkg = await Package.findOne({
-        ...buildIdentifierQuery(identifier),
-        isDeleted: { $ne: true }
-    })
-        .populate('createdBy', 'name email role')
-        .select('-__v')
-        .lean();
-
-    if (!pkg) {
-        throw ApiError(404, 'Package not found');
-    }
-
-    return pkg;
-};
-
-
-const getPublicPackagesList = async () => {
-    return Package.find({
-        status: 'ACTIVE',
-        isVerified: true,
-        isActive: true,
-        isDeleted: { $ne: true }
-    })
-        .sort({ displayOrder: 1, createdAt: -1 })
-        .select('-activities.unitAddonPrice -adminReviewNotes -isDeleted -__v -createdAt -updatedAt')
-        .lean();
-};
-
-// 5. Public: Get Single Verified Package by Slug (Hides unitAddonPrice)
-const getPublicPackageDetailsBySlug = async (identifier) => {
-    const pkg = await Package.findOne({
-        ...buildIdentifierQuery(identifier),
-        status: 'ACTIVE',
-        isVerified: true,
-        isActive: true,
-        isDeleted: { $ne: true }
-    })
-        .select('-activities.unitAddonPrice -adminReviewNotes -isDeleted -__v')
-        .lean();
-
-    if (!pkg) {
-        throw ApiError(404, 'Package not found or currently unavailable');
-    }
-
-    return pkg;
-};
-
-// 6. Public/Buyer: Live Add-On Price Calculation (Plus-Only Lock)
-const calculateCustomPackagePrice = async (identifier, customizations = []) => {
-    const pkg = await Package.findOne({
-        ...buildIdentifierQuery(identifier),
-        status: 'ACTIVE',
-        isVerified: true,
-        isActive: true,
-        isDeleted: { $ne: true }
-    }).lean();
-
-    if (!pkg) {
-        throw ApiError(404, 'Package not found or currently unavailable');
-    }
-
-    if (pkg.isCustomPrice || pkg.price === null) {
-        throw ApiError(400, 'This is a custom-priced package. Please contact support for a quote.');
-    }
-
-    let extraAddonCost = 0;
-    let finalTotalLinks = 0;
-    const breakdown = [];
-
-    for (const baseAct of pkg.activities) {
-        const customItem = customizations.find(
-            (c) => String(c.activityId) === String(baseAct._id)
-        );
-
-        const selectedCount = customItem ? Number(customItem.selectedCount) : baseAct.monthlyCount;
-
-        // Strictly prevent decreasing quantity below base package quantity (e.g. 20 -> 19 blocked)
-        if (selectedCount < baseAct.monthlyCount) {
-            throw ApiError(
-                400,
-                `'${baseAct.activityName}' cannot be less than base quantity (${baseAct.monthlyCount}).`
-            );
-        }
-
-        const extraQty = selectedCount - baseAct.monthlyCount;
-
-        if (extraQty > 0 && !baseAct.isAddonAllowed) {
-            throw ApiError(400, `Add-on quantity is not allowed for '${baseAct.activityName}'.`);
-        }
-
-        extraAddonCost += extraQty * (Number(baseAct.unitAddonPrice) || 0);
-        finalTotalLinks += selectedCount;
-
-        breakdown.push({
-            activityId: baseAct._id,
-            activityName: baseAct.activityName,
-            baseCount: baseAct.monthlyCount,
-            selectedCount,
-            extraQty
-        });
-    }
-
     return {
-        packageId: pkg._id,
-        slug: pkg.slug,
-        name: pkg.name,
-        basePrice: pkg.price,
-        extraAddonCost,
-        finalPrice: pkg.price + extraAddonCost,
-        baseTotalLinks: pkg.totalLinks,
-        finalTotalLinks,
-        activities: breakdown
+        summaryCounts,
+        websites,
+        pagination: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+        }
     };
 };
 
-// 7. Shared (Admin & Package Manager): Update Any Package by Slug
-const updatePackageBySlug = async (user, identifier, updateData) => {
-    const isAdmin = user.role === USER_ROLES.ADMIN;
+const getAdminWebsiteById = async (identifier) => {
+    const website = await Website.findOne(buildWebsiteIdentifierQuery(identifier))
+        .populate('sellerId', 'name email role socialProfiles status isDeleted createdAt')
+        .lean();
 
-    const pkg = await Package.findOne({
-        ...buildIdentifierQuery(identifier),
-        isDeleted: { $ne: true }
-    });
-
-    if (!pkg) {
-        throw ApiError(404, 'Package not found');
+    if (!website) {
+        throw ApiError(404, 'Website listing not found');
     }
 
-    if (!isAdmin && pkg.status === 'SUSPENDED') {
-        throw ApiError(403, 'Suspended packages cannot be edited. Please contact Admin.');
-    }
-
-    if (updateData.name) {
-        const normalizedName = updateData.name.toUpperCase().trim();
-        const duplicate = await Package.findOne({
-            name: normalizedName,
-            _id: { $ne: pkg._id },
-            isDeleted: { $ne: true }
-        }).lean();
-
-        if (duplicate) {
-            throw ApiError(409, `Another package with name '${normalizedName}' already exists.`);
-        }
-        updateData.name = normalizedName;
-    }
-
-    if (updateData.activities) {
-        updateData.activities = sanitizeActivities(updateData.activities);
-    }
-
-    // Custom vs Fixed Price Edge Cases
-    const effectiveIsCustom =
-        updateData.isCustomPrice !== undefined ? updateData.isCustomPrice : pkg.isCustomPrice;
-
-    if (effectiveIsCustom) {
-        updateData.price = null;
-        updateData.billingCycle = null;
-    } else {
-        const finalPrice = updateData.price !== undefined ? updateData.price : pkg.price;
-        if (finalPrice === null || finalPrice === undefined) {
-            throw ApiError(400, 'Price is required for non-custom packages.');
-        }
-        if (!updateData.billingCycle && !pkg.billingCycle) {
-            updateData.billingCycle = '/mo';
-        }
-    }
-
-    // Popular Badge Edge Cases (Shared: Admin & Package Manager)
-    if (updateData.isPopular === true) {
-        await Package.updateMany(
-            { _id: { $ne: pkg._id }, isPopular: true, isDeleted: { $ne: true } },
-            { $set: { isPopular: false, badgeText: null } }
-        );
-        if (!updateData.badgeText && !pkg.badgeText) {
-            updateData.badgeText = 'Most popular';
-        }
-    } else if (updateData.isPopular === false) {
-        updateData.badgeText = null;
-    }
-
-    // Automatic Display Order Shift Logic (Across all non-deleted packages)
-    if (updateData.displayOrder !== undefined && updateData.displayOrder !== pkg.displayOrder) {
-        const totalCount = await Package.countDocuments({ isDeleted: { $ne: true } });
-        const targetOrder = Math.max(1, Math.min(updateData.displayOrder, totalCount));
-        const oldOrder = pkg.displayOrder;
-
-        if (targetOrder < oldOrder) {
-            await Package.updateMany(
-                {
-                    _id: { $ne: pkg._id },
-                    displayOrder: { $gte: targetOrder, $lt: oldOrder },
-                    isDeleted: { $ne: true }
-                },
-                { $inc: { displayOrder: 1 } }
-            );
-        } else if (targetOrder > oldOrder) {
-            await Package.updateMany(
-                {
-                    _id: { $ne: pkg._id },
-                    displayOrder: { $gt: oldOrder, $lte: targetOrder },
-                    isDeleted: { $ne: true }
-                },
-                { $inc: { displayOrder: -1 } }
-            );
-        }
-
-        updateData.displayOrder = targetOrder;
-    }
-
-    Object.assign(pkg, updateData);
-
-    // If a REJECTED package is updated by Package Manager, resubmit for Admin verification
-    if (!isAdmin && pkg.status === 'REJECTED') {
-        pkg.status = 'PENDING_VERIFICATION';
-        pkg.isVerified = false;
-        pkg.verifiedAt = null;
-        pkg.adminReviewNotes = null;
-    }
-
-    await pkg.save();
-
-    return pkg;
+    return website;
 };
 
-// 8. Shared (Admin & Package Manager): Soft Delete Any Package by Slug
-const deletePackageBySlug = async (identifier) => {
-    const pkg = await Package.findOne({
-        ...buildIdentifierQuery(identifier),
-        isDeleted: { $ne: true }
-    });
-
-    if (!pkg) {
-        throw ApiError(404, 'Package not found');
+const reviewAndVerifyWebsite = async (identifier, reviewData) => {
+    const website = await Website.findOne(buildWebsiteIdentifierQuery(identifier));
+    if (!website) {
+        throw ApiError(404, 'Website listing not found');
     }
 
-    const oldOrder = pkg.displayOrder;
-    pkg.isDeleted = true;
-    pkg.isActive = false;
-    pkg.isPopular = false;
-    pkg.badgeText = null;
-    await pkg.save();
+    const { status, adminReviewNotes, ...seoMetrics } = reviewData;
 
-    // Shift displayOrder up for all remaining non-deleted packages
-    await Package.updateMany(
-        { displayOrder: { $gt: oldOrder }, isDeleted: { $ne: true } },
-        { $inc: { displayOrder: -1 } }
-    );
-
-    return {
-        deletedPackageId: pkg._id,
-        slug: pkg.slug,
-        name: pkg.name
-    };
-};
-
-// 9. Shared (Admin & Package Manager): Toggle Active Status by Slug
-const updatePackageStatusBySlug = async (identifier, isActive) => {
-    const pkg = await Package.findOne({
-        ...buildIdentifierQuery(identifier),
-        isDeleted: { $ne: true }
-    });
-
-    if (!pkg) {
-        throw ApiError(404, 'Package not found');
-    }
-
-    pkg.isActive = isActive;
-
-    if (!isActive && pkg.isPopular) {
-        pkg.isPopular = false;
-        pkg.badgeText = null;
-    }
-
-    await pkg.save();
-    return pkg;
-};
-
-// 10. Admin Only: Verify / Approve / Reject / Suspend Package by Slug
-const reviewPackageBySlug = async (identifier, { status, adminReviewNotes }) => {
-    const pkg = await Package.findOne({
-        ...buildIdentifierQuery(identifier),
-        isDeleted: { $ne: true }
-    });
-
-    if (!pkg) {
-        throw ApiError(404, 'Package not found');
-    }
-
-    pkg.status = status;
+    website.status = status;
     if (adminReviewNotes !== undefined) {
-        pkg.adminReviewNotes = adminReviewNotes;
+        website.adminReviewNotes = adminReviewNotes;
     }
 
     if (status === 'ACTIVE') {
-        pkg.isVerified = true;
-        pkg.verifiedAt = new Date();
-        pkg.isActive = true;
+        website.isVerified = true;
+        website.verifiedAt = new Date();
     } else if (status === 'REJECTED' || status === 'PENDING_VERIFICATION' || status === 'SUSPENDED') {
-        pkg.isVerified = false;
-        pkg.isActive = false;
+        website.isVerified = false;
     }
 
-    await pkg.save();
-    return pkg;
+    Object.keys(seoMetrics).forEach((key) => {
+        if (seoMetrics[key] !== undefined) {
+            website[key] = seoMetrics[key];
+        }
+    });
+
+    await website.save();
+
+    return website;
+};
+
+const getPublicWebsiteDetailsById = async (identifier) => {
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
+    const query = isObjectId ? { _id: identifier } : { slug: identifier.toLowerCase() };
+
+    const website = await Website.findOne({
+        ...query,
+        status: 'ACTIVE',
+        isVerified: true
+    })
+        .select('-adminReviewNotes -__v')
+        .populate('sellerId', 'name status isDeleted')
+        .lean();
+
+    // Agar website nahi mili ya seller deleted/inactive ho gaya hai
+    if (
+        !website ||
+        !website.sellerId ||
+        website.sellerId.isDeleted ||
+        website.sellerId.status !== 'ACTIVE'
+    ) {
+        throw ApiError(404, 'Website not found or currently unavailable');
+    }
+
+    // Seller ki sensitive info hata kar clean object return karo
+    const { sellerId, ...websiteDetails } = website;
+
+    return {
+        ...websiteDetails,
+        seller: {
+            _id: sellerId._id,
+            name: sellerId.name
+        }
+    };
+};
+
+const updateSellerWebsiteById = async (sellerId, identifier, updateData) => {
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
+    const query = isObjectId ? { _id: identifier } : { slug: identifier.toLowerCase() };
+
+    const website = await Website.findOne({
+        ...query,
+        sellerId
+    });
+
+    if (!website) {
+        throw ApiError(404, 'Website listing not found');
+    }
+
+    if (website.status === 'SUSPENDED') {
+        throw ApiError(403, 'Suspended website listings cannot be edited. Please contact support.');
+    }
+
+    Object.assign(website, updateData);
+
+    // Sirf REJECTED listing fix hokar update ho tabhi re-verification ke liye bhejo
+    // Agar pehle se ACTIVE hai toh ACTIVE + isVerified: true hi rahegi
+    if (website.status === 'REJECTED') {
+        website.status = 'PENDING_VERIFICATION';
+        website.isVerified = false;
+        website.verifiedAt = null;
+        website.adminReviewNotes = null;
+    }
+
+    await website.save();
+
+    return website;
+};
+
+const getSellerWebsiteDetailsById = async (sellerId, identifier) => {
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(identifier);
+    const query = isObjectId ? { _id: identifier } : { slug: identifier.toLowerCase() };
+
+    const website = await Website.findOne({
+        ...query,
+        sellerId
+    })
+        .select('-__v')
+        .lean();
+
+    if (!website) {
+        throw ApiError(404, 'Website listing not found');
+    }
+
+    return website;
 };
 
 module.exports = {
-    createNewPackage,
-    getAllManagedPackagesList,
-    getManagedPackageDetails,
-    getPublicPackagesList,
-    getPublicPackageDetailsBySlug,
-    calculateCustomPackagePrice,
-    updatePackageBySlug,
-    deletePackageBySlug,
-    updatePackageStatusBySlug,
-    reviewPackageBySlug
+    getDomainRegistrationHistory,
+    addSingleWebsite,
+    processBulkCsvUpload,
+    getSellerWebsitesList,
+    getPublicMarketplaceList,
+    getAdminWebsitesList,
+    getAdminWebsiteById,
+    reviewAndVerifyWebsite,
+    getPublicWebsiteDetailsById,
+    updateSellerWebsiteById,
+    getSellerWebsiteDetailsById
 };

@@ -48,7 +48,7 @@ const {
 
 const {
     adminListWebsitesQuerySchema,
-    websiteIdParamSchema,
+    websiteSlugParamSchema,
     adminReviewWebsiteSchema
 } = require('../validations/website.validation');
 
@@ -137,8 +137,8 @@ router.delete('/portfolio/:identifier', validate(portfolioIdentifierParamSchema)
 
 // Admin Website Listing & Verification Section
 router.get('/websites', validate(adminListWebsitesQuerySchema), getAllWebsitesForAdmin);
-router.get('/websites/:websiteId', validate(websiteIdParamSchema), getWebsiteDetailsForAdmin);
-router.patch('/websites/:websiteId/review', validate(adminReviewWebsiteSchema), updateWebsiteVerificationStatus);
+router.get('/websites/:slug', validate(websiteSlugParamSchema), getWebsiteDetailsForAdmin);
+router.patch('/websites/:slug/review', validate(adminReviewWebsiteSchema), updateWebsiteVerificationStatus);
 
 // Footer Management Section (Admin Only Update)
 router.patch('/footer', validate(updateFooterSchema), modifyFooter);

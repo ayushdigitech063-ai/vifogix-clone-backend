@@ -46,6 +46,22 @@ const createPackageSchema = z.object({
                 .trim()
                 .min(2, 'Tagline must be at least 2 characters')
                 .max(150, 'Tagline cannot exceed 150 characters'),
+            overview: z
+                .string()
+                .trim()
+                .max(1500, 'Overview cannot exceed 1500 characters')
+                .nullable()
+                .optional(),
+            highlights: z
+                .array(
+                    z
+                        .string()
+                        .trim()
+                        .min(1, 'Highlight point cannot be empty')
+                        .max(250, 'Highlight point cannot exceed 250 characters')
+                )
+                .max(15, 'Cannot add more than 15 highlight points')
+                .optional(),
             price: z.coerce.number().min(0, 'Price cannot be negative').nullable().optional(),
             isCustomPrice: z.boolean().optional().default(false),
             customPriceLabel: z.string().trim().max(30).optional().default('Custom'),
@@ -78,6 +94,22 @@ const updatePackageSchema = z.object({
         .object({
             name: z.string().trim().min(2).max(80).optional(),
             tagline: z.string().trim().min(2).max(150).optional(),
+            overview: z
+                .string()
+                .trim()
+                .max(1500, 'Overview cannot exceed 1500 characters')
+                .nullable()
+                .optional(),
+            highlights: z
+                .array(
+                    z
+                        .string()
+                        .trim()
+                        .min(1, 'Highlight point cannot be empty')
+                        .max(250, 'Highlight point cannot exceed 250 characters')
+                )
+                .max(15, 'Cannot add more than 15 highlight points')
+                .optional(),
             price: z.coerce.number().min(0).nullable().optional(),
             isCustomPrice: z.boolean().optional(),
             customPriceLabel: z.string().trim().max(30).optional(),

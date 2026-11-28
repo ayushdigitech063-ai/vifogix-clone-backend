@@ -15,7 +15,6 @@ const {
     getSellerWebsiteDetailsById
 } = require('../../services/website.service');
 
-
 const getMainCategories = asyncHandler(async (req, res) => {
     return res.status(200).json({
         success: true,
@@ -26,7 +25,6 @@ const getMainCategories = asyncHandler(async (req, res) => {
         }
     });
 });
-
 
 const getSubCategoriesByCategory = asyncHandler(async (req, res) => {
     const { category } = req.query;
@@ -54,7 +52,6 @@ const checkDomainStats = asyncHandler(async (req, res) => {
     });
 });
 
-
 const createSingleListing = asyncHandler(async (req, res) => {
     if (!req.user?._id) {
         throw ApiError(401, 'Unauthorized seller access');
@@ -69,7 +66,6 @@ const createSingleListing = asyncHandler(async (req, res) => {
         data: { website, domainStats }
     });
 });
-
 
 const uploadBulkCsvListings = asyncHandler(async (req, res) => {
     if (!req.user?._id) {
@@ -92,7 +88,6 @@ const uploadBulkCsvListings = asyncHandler(async (req, res) => {
     });
 });
 
-
 const getMyListings = asyncHandler(async (req, res) => {
     if (!req.user?._id) {
         throw ApiError(401, 'Unauthorized seller access');
@@ -108,7 +103,6 @@ const getMyListings = asyncHandler(async (req, res) => {
     });
 });
 
-
 const getMarketplaceListings = asyncHandler(async (req, res) => {
     const data = await getPublicMarketplaceList(req.query);
 
@@ -119,7 +113,6 @@ const getMarketplaceListings = asyncHandler(async (req, res) => {
         data
     });
 });
-
 
 const getAllWebsitesForAdmin = asyncHandler(async (req, res) => {
     const data = await getAdminWebsitesList(req.query);
@@ -132,9 +125,9 @@ const getAllWebsitesForAdmin = asyncHandler(async (req, res) => {
     });
 });
 
-// 7. Admin: Get Single Website Details
+// 7. Admin: Get Single Website Details by Slug
 const getWebsiteDetailsForAdmin = asyncHandler(async (req, res) => {
-    const website = await getAdminWebsiteById(req.params.websiteId);
+    const website = await getAdminWebsiteById(req.params.slug || req.params.websiteId);
 
     return res.status(200).json({
         success: true,
@@ -144,9 +137,12 @@ const getWebsiteDetailsForAdmin = asyncHandler(async (req, res) => {
     });
 });
 
-
+// 8. Admin: Verify / Review Website by Slug
 const updateWebsiteVerificationStatus = asyncHandler(async (req, res) => {
-    const updatedWebsite = await reviewAndVerifyWebsite(req.params.websiteId, req.body);
+    const updatedWebsite = await reviewAndVerifyWebsite(
+        req.params.slug || req.params.websiteId,
+        req.body
+    );
 
     return res.status(200).json({
         success: true,
